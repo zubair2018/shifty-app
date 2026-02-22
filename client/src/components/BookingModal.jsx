@@ -1,177 +1,136 @@
-// src/components/BookingModal.jsx
 import { useState } from "react";
 
-const initialForm = {
-  customerName: "",
-  customerPhone: "",
-  pickupAddress: "",
-  dropAddress: "",
-  loadType: "mini",
-  weightTons: "",
-};
-
 const BookingModal = ({ onClose }) => {
-  const [form, setForm] = useState(initialForm);
-  const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState("");
+  const [form, setForm] = useState({
+    name: "",
+    phone: "",
+    pickup: "",
+    drop: "",
+    date: "",
+    time: "",
+    details: "",
+  });
+  const [status, setStatus] = useState("idle");
+  const [error, setError] = useState("");
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm((f) => ({ ...f, [name]: value }));
+    setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
   };
 
   const handleSubmit = async (e) => {
-    if (e) e.preventDefault();
-    setLoading(true);
-    setStatus("");
+    e.preventDefault();
+    setError("");
+
+    if (!form.name || !form.phone || !form.pickup || !form.drop || !form.date || !form.time) {
+      setError("Please fill all required fields, including date and time.");
+      return;
+    }
 
     try {
+      setStatus("loading");
+
       const res = await fetch("http://localhost:4000/api/bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...form,
-          weightTons: form.weightTons ? Number(form.weightTons) : undefined,
-        }),
+        body: JSON.stringify(form),
       });
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to create booking");
+        throw new Error("Failed");
       }
 
-      const data = await res.json();
-      setStatus(
-        `Booking created. We matched ${data.driverCount || 0} drivers for your load.`
-      );
-      setForm(initialForm);
+      setStatus("success");
+      setTimeout(() => onClose(), 1200);
     } catch (err) {
-      setStatus(err.message);
-    } finally {
-      setLoading(false);
+      setStatus("error");
+      setError("Could not submit booking. Please try again.");
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      {/* Mobile-safe card */}
-      <div className="w-full max-w-md mx-3 rounded-2xl bg-slate-950 border border-slate-700 shadow-xl max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
-          <div>
-            <h2 className="text-base font-semibold text-white">Book a move</h2>
-            <p className="text-[11px] text-slate-400">
-              Share basic details, our team matches you with the right truck.
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="ml-3 text-slate-400 hover:text-slate-200 text-sm"
-          >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur">
+      <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-slate-100">
+            Book a truck
+          </h2>
+          <button onClick={onClose} className="text-slate-400 text-sm">
             ✕
           </button>
         </div>
 
-        {/* Scrollable body */}
-        <div className="px-4 py-3 overflow-y-auto text-sm">
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] mb-1">Your name</label>
-                <input
-                  name="customerName"
-                  value={form.customerName}
-                  onChange={handleChange}
-                  required
-                  className="w-full rounded-md bg-slate-900 border border-slate-700 px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] mb-1">Phone number</label>
-                <input
-                  name="customerPhone"
-                  value={form.customerPhone}
-                  onChange={handleChange}
-                  required
-                  className="w-full rounded-md bg-slate-900 border border-slate-700 px-3 py-2 text-sm"
-                />
-              </div>
-            </div>
+        <form onSubmit={handleSubmit} className="space-y-3 text-[12px]">
+          <input
+            name="name"
+            value={form.name}
+            onChange={handleChange}
+            placeholder="Your name"
+            className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-slate-100 text-[12px]"
+          />
+          <input
+            name="phone"
+            value={form.phone}
+            onChange={handleChange}
+            placeholder="Phone number"
+            className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-slate-100 text-[12px]"
+          />
+          <input
+            name="pickup"
+            value={form.pickup}
+            onChange={handleChange}
+            placeholder="Pickup location"
+            className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-slate-100 text-[12px]"
+          />
+          <input
+            name="drop"
+            value={form.drop}
+            onChange={handleChange}
+            placeholder="Drop location"
+            className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-slate-100 text-[12px]"
+          />
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] mb-1">
-                  Pickup address (with city)
-                </label>
-                <input
-                  name="pickupAddress"
-                  value={form.pickupAddress}
-                  onChange={handleChange}
-                  required
-                  className="w-full rounded-md bg-slate-900 border border-slate-700 px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] mb-1">
-                  Drop address (with city)
-                </label>
-                <input
-                  name="dropAddress"
-                  value={form.dropAddress}
-                  onChange={handleChange}
-                  required
-                  className="w-full rounded-md bg-slate-900 border border-slate-700 px-3 py-2 text-sm"
-                />
-              </div>
-            </div>
+          <div className="flex gap-2">
+            <input
+              type="date"
+              name="date"
+              value={form.date}
+              onChange={handleChange}
+              className="flex-1 rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-slate-100 text-[12px]"
+            />
+            <input
+              type="time"
+              name="time"
+              value={form.time}
+              onChange={handleChange}
+              className="flex-1 rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-slate-100 text-[12px]"
+            />
+          </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] mb-1">Load type</label>
-                <select
-                  name="loadType"
-                  value={form.loadType}
-                  onChange={handleChange}
-                  className="w-full rounded-md bg-slate-900 border border-slate-700 px-3 py-2 text-xs"
-                >
-                  <option value="mini">Mini trucks – within city</option>
-                  <option value="medium">
-                    Medium trucks – city & regional
-                  </option>
-                  <option value="heavy">
-                    Heavy & interstate – factories, full truck
-                  </option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-[11px] mb-1">
-                  Approx weight (tons)
-                </label>
-                <input
-                  name="weightTons"
-                  value={form.weightTons}
-                  onChange={handleChange}
-                  className="w-full rounded-md bg-slate-900 border border-slate-700 px-3 py-2 text-sm"
-                />
-              </div>
-            </div>
+          <textarea
+            name="details"
+            value={form.details}
+            onChange={handleChange}
+            placeholder="What are you moving? Any timing notes?"
+            className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-slate-100 text-[12px] h-20"
+          />
 
-            {status && (
-              <p className="text-[11px] text-yellow-300 mt-1">{status}</p>
-            )}
-          </form>
-        </div>
+          {error && (
+            <p className="text-[11px] text-red-400">{error}</p>
+          )}
+          {status === "success" && (
+            <p className="text-[11px] text-emerald-400">
+              Booking received. We will contact you soon.
+            </p>
+          )}
 
-        {/* Footer button fixed to bottom of card */}
-        <div className="px-4 py-3 border-t border-slate-800">
           <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="w-full rounded-full bg-yellow-400 text-slate-950 font-semibold py-2.5 text-sm hover:bg-yellow-300 disabled:opacity-70"
+            type="submit"
+            disabled={status === "loading"}
+            className="w-full rounded-full bg-yellow-400 py-2 text-[12px] font-semibold text-slate-950 hover:bg-yellow-300 disabled:opacity-70"
           >
-            {loading ? "Booking..." : "Submit booking"}
+            {status === "loading" ? "Submitting..." : "Submit booking"}
           </button>
-        </div>
+        </form>
       </div>
     </div>
   );

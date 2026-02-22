@@ -1,6 +1,7 @@
 // server/routes/drivers.js
 const express = require("express");
 const Driver = require("../models/Driver");
+const { store, newId } = require("../memoryStore");
 
 const router = express.Router();
 
@@ -18,7 +19,7 @@ router.post("/", async (req, res) => {
       truckCategory,
     } = req.body;
 
-    const driver = await Driver.create({
+    const payload = {
       name,
       phone,
       truckType,
@@ -29,21 +30,40 @@ router.post("/", async (req, res) => {
       truckCategory: truckCategory || "mini",
       isAvailable: false,
       currentCity: city,
-    });
+    };
 
-    res.status(201).json(driver);
+    if (req.app.locals.useMemory) {
+      if (!payload.name || !payload.phone || !payload.truckType || !payload.city) {
+        return res.status(400).json({ success: false, error: "name, phone, truckType, city are required" });
+      }
+      const driver = {
+        _id: newId(),
+        ...payload,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      store.drivers.unshift(driver);
+      return res.status(201).json(driver);
+    }
+
+    const driver = await Driver.create(payload);
+    return res.status(201).json(driver);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ success: false, error: err.message });
   }
 });
 
 // GET /api/drivers - list drivers
 router.get("/", async (req, res) => {
   try {
+    if (req.app.locals.useMemory) {
+      return res.json(store.drivers);
+    }
+
     const drivers = await Driver.find().sort({ createdAt: -1 });
-    res.json(drivers);
+    return res.json(drivers);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -51,6 +71,19 @@ router.get("/", async (req, res) => {
 router.patch("/:id/availability", async (req, res) => {
   try {
     const { isAvailable, currentCity } = req.body;
+
+    if (req.app.locals.useMemory) {
+      const idx = store.drivers.findIndex((d) => d._id === req.params.id);
+      if (idx === -1) return res.status(404).json({ success: false, error: "Driver not found" });
+      store.drivers[idx] = {
+        ...store.drivers[idx],
+        isAvailable: !!isAvailable,
+        ...(currentCity ? { currentCity } : {}),
+        updatedAt: new Date().toISOString(),
+      };
+      return res.json(store.drivers[idx]);
+    }
+
     const driver = await Driver.findByIdAndUpdate(
       req.params.id,
       {
@@ -59,10 +92,10 @@ router.patch("/:id/availability", async (req, res) => {
       },
       { new: true }
     );
-    if (!driver) return res.status(404).json({ error: "Driver not found" });
-    res.json(driver);
+    if (!driver) return res.status(404).json({ success: false, error: "Driver not found" });
+    return res.json(driver);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ success: false, error: err.message });
   }
 });
 

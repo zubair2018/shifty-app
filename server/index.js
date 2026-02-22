@@ -1,25 +1,28 @@
 // server/index.js
-require("dotenv").config();
-
-const express = require("express");
 const mongoose = require("mongoose");
+const express = require("express");
 const cors = require("cors");
 const path = require("path");
+const morgan = require("morgan");
+
+const config = require("./config");
 
 const driversRoutes = require("./routes/drivers");
 const bookingsRoutes = require("./routes/bookings");
+const authRoutes = require("./routes/auth");
+const partnersRoutes = require("./routes/partners");
+const ownersRoutes = require("./routes/owners");
+const errorHandler = require("./middleware/errorHandler");
 
 const app = express();
 
-const PORT = process.env.PORT || 4000;
-const MONGO_URI = process.env.MONGO_URI;
-const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:5173";
+// If Mongo isn't configured, routes fall back to a tiny in-memory store (useful for local testing)
+app.locals.useMemory = !config.mongoUri;
 
-console.log("MONGO_URI:", MONGO_URI);
-
+app.use(morgan("dev"));
 app.use(
   cors({
-    origin: CORS_ORIGIN,
+    origin: config.corsOrigin,
   })
 );
 app.use(express.json());
@@ -29,17 +32,34 @@ app.get("/", (req, res) => {
   res.send("Shifty API is running");
 });
 
+app.use("/api/auth", authRoutes);
+app.use("/api/partners", partnersRoutes);
+app.use("/api/owners", ownersRoutes); // legacy alias for tests/older code
+
 app.use("/api/drivers", driversRoutes);
 app.use("/api/bookings", bookingsRoutes);
 
-mongoose
-  .connect(MONGO_URI)
-  .then(() => {
+app.use(errorHandler);
+
+async function start() {
+  if (config.mongoUri) {
+    await mongoose.connect(config.mongoUri);
     console.log("Connected to MongoDB");
-    app.listen(PORT, () =>
-      console.log(`API running on http://localhost:${PORT}`)
-    );
-  })
-  .catch((err) => {
-    console.error("MongoDB connection error:", err.message);
+  } else {
+    console.warn("MongoDB URI not set (MONGO_URI/MONGODB_URI). Using in-memory store.");
+  }
+
+  app.listen(config.port, () => {
+    console.log(`API running on http://localhost:${config.port}`);
   });
+}
+
+// Export app for tests (supertest) and start server only when run directly
+module.exports = app;
+
+if (require.main === module) {
+  start().catch((err) => {
+    console.error("Server start error:", err);
+    process.exitCode = 1;
+  });
+}

@@ -1,38 +1,29 @@
-// src/components/AboutSection.jsx
-const AboutSection = () => {
+// src/components/AboutShifty.jsx
+const AboutShifty = () => {
   return (
-    <section
-      id="about"
-      className="bg-slate-950 border-t border-slate-900/60 py-10 md:py-14"
-    >
-      <div className="mx-auto max-w-6xl px-4">
-        <h2 className="text-xl md:text-2xl font-semibold text-slate-50 mb-3">
+    <section className="w-full bg-slate-950 py-12 px-4">
+      <div className="max-w-4xl mx-auto">
+        <h2 className="text-2xl md:text-3xl font-semibold text-slate-100 mb-4">
           About Shifty
         </h2>
 
-        <p className="text-xs md:text-sm text-slate-400 max-w-2xl mb-3">
-          Shifty started with a simple observation in Kashmir: people still
-          depend on broker calls and favours to arrange trucks, even for
-          everyday loads. We&apos;re building a clean, app‑like way to get a
-          trusted truck without losing that local trust.
+        <p className="text-sm md:text-base text-slate-300 leading-relaxed">
+          Shifty is a modern platform that makes booking trucks for house moves,
+          office shifts, and goods transport simple and transparent. We connect
+          customers with reliable truck owners, handle the coordination, and
+          keep everyone updated at every step.
         </p>
 
-        <p className="text-xs md:text-sm text-slate-400 max-w-2xl mb-3">
-          We do two things very well: match customers with the right mini,
-          medium, or heavy trucks, and keep local owners at the center. No
-          confusing pricing, no dark commissions. Just clear trips that make
-          sense for both sides.
-        </p>
-
-        <p className="text-xs md:text-sm text-slate-400 max-w-2xl">
-          Shifty is starting in Anantnag and nearby routes, then expanding
-          organically. The goal is not to replace the existing network, but to
-          give it a modern, reliable layer so work flows smoothly and everyone
-          earns better.
+        <p className="mt-3 text-sm md:text-base text-slate-300 leading-relaxed">
+          Whether you are moving a single room or an entire office, Shifty helps
+          you find the right vehicle, track timings, and avoid last‑minute
+          surprises. Our goal is to bring clarity, fair pricing, and professional
+          service to local shifting so you can focus on what matters instead of
+          worrying about logistics.
         </p>
       </div>
     </section>
   );
 };
 
-export default AboutSection;
+export default AboutShifty;

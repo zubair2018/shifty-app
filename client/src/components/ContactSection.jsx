@@ -18,13 +18,13 @@ const ContactSection = () => {
           <p>
             WhatsApp:{" "}
             <span className="text-yellow-300">
-              +91-XXXXXXXXXX
+              +91-808253xxxx
             </span>
           </p>
           <p>
             Email:{" "}
             <span className="text-yellow-300">
-              support@shifty.in
+              shiftytechnologies@gmail.com
             </span>
           </p>
           <p className="text-[11px] text-slate-500">

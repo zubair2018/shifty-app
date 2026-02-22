@@ -1,4 +1,3 @@
-// src/components/Footer.jsx
 const Footer = () => {
   return (
     <footer className="bg-slate-950 border-t border-slate-900/70 mt-8">
@@ -25,76 +24,54 @@ const Footer = () => {
             </p>
           </div>
 
-          {/* Columns: Legal + Help + Newsletter + Socials */}
+          {/* Columns: Legal + Help + Socials */}
           <div className="flex flex-1 flex-wrap gap-8 justify-start md:justify-end text-[11px] text-slate-300">
+            {/* LEGAL */}
             <div className="space-y-2">
               <h3 className="text-[12px] font-semibold text-slate-100">
                 Legal
               </h3>
-              <button className="block text-left hover:text-yellow-300">
+              <a href="/terms" className="block hover:text-yellow-300">
                 Terms &amp; Conditions
-              </button>
-              <button className="block text-left hover:text-yellow-300">
+              </a>
+              <a href="/privacy" className="block hover:text-yellow-300">
                 Privacy Policy
-              </button>
-              <button className="block text-left hover:text-yellow-300">
+              </a>
+              <a href="/cancellation" className="block hover:text-yellow-300">
                 Cancellation &amp; Refund
-              </button>
+              </a>
             </div>
 
+            {/* HELP */}
             <div className="space-y-2">
               <h3 className="text-[12px] font-semibold text-slate-100">
                 Help
               </h3>
-              <button className="block text-left hover:text-yellow-300">
+              <a href="/faqs" className="block hover:text-yellow-300">
                 FAQs
-              </button>
-              <button className="block text-left hover:text-yellow-300">
+              </a>
+              <button
+                onClick={() =>
+                  window.open(
+                    "https://wa.me/91XXXXXXXXXX?text=Hi%20Shifty%2C%20I%20need%20help",
+                    "_blank"
+                  )
+                }
+                className="block text-left hover:text-yellow-300"
+              >
                 Support &amp; help centre
               </button>
-              <button className="block text-left hover:text-yellow-300">
+              <a href="/safety" className="block hover:text-yellow-300">
                 Safety &amp; guidelines
-              </button>
+              </a>
             </div>
 
-            {/* Newsletter signup */}
-            <div className="space-y-2 max-w-xs">
-              <h3 className="text-[12px] font-semibold text-slate-100">
-                Newsletter
-              </h3>
-              <p className="text-[11px] text-slate-400">
-                Get short updates on new routes, offers and tools for truck
-                owners. No spam.
-              </p>
-              <form
-                onSubmit={(e) => e.preventDefault()}
-                className="flex flex-col sm:flex-row items-stretch gap-2"
-              >
-                <input
-                  type="email"
-                  required
-                  placeholder="Enter your email"
-                  className="flex-1 rounded-full bg-slate-900/80 border border-slate-700 px-3 py-2 text-[11px] text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-yellow-400"
-                />
-                <button
-                  type="submit"
-                  className="whitespace-nowrap rounded-full bg-yellow-400 px-4 py-2 text-[11px] font-semibold text-slate-950 hover:bg-yellow-300 transition-colors"
-                >
-                  Join list
-                </button>
-              </form>
-              <p className="text-[10px] text-slate-500">
-                By subscribing, you agree to our Privacy Policy and that we may
-                contact you about Shifty updates.
-              </p>
-            </div>
-
+            {/* SOCIALS – replace hrefs when you have real profiles */}
             <div className="space-y-2">
               <h3 className="text-[12px] font-semibold text-slate-100">
                 Connect
               </h3>
               <div className="flex items-center gap-3 text-slate-300">
-                {/* Social icons (keep your existing links) */}
                 <a
                   href="https://facebook.com"
                   target="_blank"
@@ -173,9 +150,7 @@ const Footer = () => {
 
         {/* Bottom bar */}
         <div className="mt-4 flex flex-col gap-2 border-t border-slate-900/70 pt-3 text-[10px] text-slate-500 md:flex-row md:items-center md:justify-between">
-          <span>
-            © {new Date().getFullYear()} Shifty. All rights reserved.
-          </span>
+          <span>© {new Date().getFullYear()} Shifty. All rights reserved.</span>
           <span className="max-w-md">
             Shifty connects customers and independent truck owners and does not
             operate vehicles itself. Please confirm load details, rates and
