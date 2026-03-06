@@ -20,7 +20,7 @@ const AppHeader = ({ onPartnerClick, onBookClick, onScrollTo }) => {
           </div>
         </div>
         <div className="flex flex-col leading-tight">
-          <span className="text-sm font-semibold">Shifty</span>
+          <span className="text-sm font-semibold">Shify</span>
           <span className="text-[10px] text-slate-400">
             Trusted trucks on tap
           </span>

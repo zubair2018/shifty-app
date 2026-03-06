@@ -1,46 +1,51 @@
 // server/models/Booking.js
-const mongoose = require("mongoose");
+import { db, nextBookingId } from "../memoryStore.js";
 
-const bookingSchema = new mongoose.Schema(
-  {
-    customerName: { type: String, required: true },
-    customerPhone: { type: String, required: true },
+export function createBooking(data) {
+  const id = nextBookingId();
+  const now = new Date().toISOString();
 
-    pickupAddress: { type: String, required: true },
-    dropAddress: { type: String, required: true },
+  const booking = {
+    id,
+    customerName: data.customerName,
+    customerPhone: data.customerPhone,
+    pickupAddress: data.pickupAddress,
+    dropAddress: data.dropAddress,
+    date: data.date,
+    time: data.time,
+    truckType: data.truckType || "",   // NEW field
+    loadDetails: data.loadDetails || "",
+    status: "pending",                 // pending | assigned | in_progress | completed | cancelled
+    assignedDriverId: null,
+    createdAt: now,
+    updatedAt: now
+  };
 
-    // Optional fields (used by the current frontend pages)
-    pickupCity: { type: String },
-    dropCity: { type: String },
-    pickupDate: { type: String },
-    pickupTime: { type: String },
-    details: { type: String },
+  db.bookings.push(booking);
+  return booking;
+}
 
-    loadType: {
-      type: String,
-      enum: ["mini", "medium", "heavy"],
-      required: true,
-    },
-    weightTons: Number,
+export function listBookings() {
+  return db.bookings;
+}
 
-    status: {
-      type: String,
-      enum: [
-        "PENDING",
-        "SEARCHING_DRIVER",
-        "ASSIGNED",
-        "IN_PROGRESS",
-        "COMPLETED",
-        "CANCELLED",
-      ],
-      default: "PENDING",
-    },
+export function getBookingById(id) {
+  return db.bookings.find((b) => b.id === id) || null;
+}
 
-    requestedDrivers: [{ type: mongoose.Schema.Types.ObjectId, ref: "Driver" }],
-    assignedDriver: { type: mongoose.Schema.Types.ObjectId, ref: "Driver" },
-    expiresAt: Date,
-  },
-  { timestamps: true }
-);
+export function setBookingStatus(id, status) {
+  const booking = getBookingById(id);
+  if (!booking) return null;
+  booking.status = status;
+  booking.updatedAt = new Date().toISOString();
+  return booking;
+}
 
-module.exports = mongoose.model("Booking", bookingSchema);
+export function assignDriverToBooking(id, driverId) {
+  const booking = getBookingById(id);
+  if (!booking) return null;
+  booking.assignedDriverId = driverId;
+  booking.status = "assigned";
+  booking.updatedAt = new Date().toISOString();
+  return booking;
+}

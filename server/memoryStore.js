@@ -1,14 +1,29 @@
-const { Types } = require("mongoose");
+// server/memoryStore.js
 
-function newId() {
-  return new Types.ObjectId().toString();
-}
-
-// Very small in-memory store for local dev/tests when Mongo isn't configured.
-const store = {
-  drivers: [],
+export const db = {
   bookings: [],
+  drivers: [],
+  users: [],
+  partners: []
 };
 
-module.exports = { store, newId };
+let bookingCounter = 1;
+let driverCounter = 1;
+let userCounter = 1;
+let partnerCounter = 1;
 
+export function nextBookingId() {
+  return String(bookingCounter++);
+}
+
+export function nextDriverId() {
+  return String(driverCounter++);
+}
+
+export function nextUserId() {
+  return String(userCounter++);
+}
+
+export function nextPartnerId() {
+  return String(partnerCounter++);
+}

@@ -1,13 +1,27 @@
-const mongoose = require("mongoose");
+// server/models/User.js
+import { db, nextUserId } from "../memoryStore.js";
 
-const UserSchema = new mongoose.Schema(
-  {
-    email: { type: String, required: true, unique: true },
-    passwordHash: { type: String, required: true },
-    role: { type: String, enum: ["admin", "operator", "driver", "customer"], default: "customer" },
-    name: { type: String },
-  },
-  { timestamps: true }
-);
+export function createUser(data) {
+  const id = nextUserId();
+  const now = new Date().toISOString();
 
-module.exports = mongoose.model("User", UserSchema);
+  const user = {
+    id,
+    name: data.name,
+    email: data.email,
+    role: data.role || "owner", // owner | admin
+    createdAt: now
+    // later: password hash, etc.
+  };
+
+  db.users.push(user);
+  return user;
+}
+
+export function listUsers() {
+  return db.users;
+}
+
+export function getUserById(id) {
+  return db.users.find((u) => u.id === id) || null;
+}

@@ -1,27 +1,48 @@
 // server/models/Driver.js
-const mongoose = require("mongoose");
+import { db, nextDriverId } from "../memoryStore.js";
 
-const driverSchema = new mongoose.Schema(
-  {
-    name: { type: String, required: true },
-    phone: { type: String, required: true },
-    truckType: { type: String, required: true }, // free text
-    truckCategory: {
-      type: String,
-      enum: ["mini", "medium", "heavy"],
-      required: true, // for matching
-    },
-    city: { type: String, required: true }, // base city
-    notes: String,
+export function createDriver(data) {
+  const id = nextDriverId();
+  const now = new Date().toISOString();
 
-    aadharNumber: String,
-    dlNumber: String,
+  const driver = {
+    id,
+    name: data.name,
+    phone: data.phone,
+    city: data.city,
+    truckTypes: data.truckTypes || "",
+    fleetSize: data.fleetSize || "",
+    drivingLicenseNo: data.drivingLicenseNo || "",
+    aadharNumber: data.aadharNumber || "",
+    licenseDocUrl: data.licenseDocUrl || "",
+    aadharDocUrl: data.aadharDocUrl || "",
+    status: "pending",   // pending | verified | rejected
+    notes: "",
+    createdAt: now,
+    updatedAt: now
+  };
 
-    // Availability
-    isAvailable: { type: Boolean, default: false },
-    currentCity: { type: String }, // can override base city if driver moves
-  },
-  { timestamps: true }
-);
+  db.drivers.push(driver);
+  return driver;
+}
 
-module.exports = mongoose.model("Driver", driverSchema);
+export function listDrivers() {
+  return db.drivers;
+}
+
+export function listPendingDrivers() {
+  return db.drivers.filter((d) => d.status === "pending");
+}
+
+export function getDriverById(id) {
+  return db.drivers.find((d) => d.id === id) || null;
+}
+
+export function setDriverStatus(id, status, notes = "") {
+  const driver = getDriverById(id);
+  if (!driver) return null;
+  driver.status = status;
+  if (notes) driver.notes = notes;
+  driver.updatedAt = new Date().toISOString();
+  return driver;
+}

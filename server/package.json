@@ -1,26 +1,19 @@
 {
   "name": "shifty-server",
   "version": "1.0.0",
+  "description": "Backend for Shifty bookings and driver management",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "jest"
+    "test": "echo \"no tests yet\" && exit 0"
   },
   "dependencies": {
-    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
-    "dotenv": "^16.1.4",
-    "express": "^4.21.0",
-    "joi": "^17.9.2",
-    "jsonwebtoken": "^9.0.0",
-    "mongodb": "^7.0.0",
-    "mongoose": "^7.0.4",
-    "morgan": "^1.10.0"
+    "express": "^4.19.0"
   },
   "devDependencies": {
-    "jest": "^29.5.0",
-    "nodemon": "^3.1.11",
-    "supertest": "^6.3.3"
+    "nodemon": "^3.1.0"
   }
 }

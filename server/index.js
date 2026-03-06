@@ -1,65 +1,29 @@
 // server/index.js
-const mongoose = require("mongoose");
-const express = require("express");
-const cors = require("cors");
-const path = require("path");
-const morgan = require("morgan");
+import express from "express";
+import cors from "cors";
+import { config } from "./config.js";
 
-const config = require("./config");
-
-const driversRoutes = require("./routes/drivers");
-const bookingsRoutes = require("./routes/bookings");
-const authRoutes = require("./routes/auth");
-const partnersRoutes = require("./routes/partners");
-const ownersRoutes = require("./routes/owners");
-const errorHandler = require("./middleware/errorHandler");
+import bookingRoutes from "./routes/bookings.js";
+import driverRoutes from "./routes/drivers.js";
+import ownerRoutes from "./routes/owners.js";
+import partnerRoutes from "./routes/partners.js";
+import authRoutes from "./routes/auth.js";
 
 const app = express();
 
-// If Mongo isn't configured, routes fall back to a tiny in-memory store (useful for local testing)
-app.locals.useMemory = !config.mongoUri;
-
-app.use(morgan("dev"));
-app.use(
-  cors({
-    origin: config.corsOrigin,
-  })
-);
+app.use(cors());
 app.use(express.json());
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-app.get("/", (req, res) => {
-  res.send("Shifty API is running");
+app.get("/health", (_req, res) => {
+  res.json({ ok: true, time: new Date().toISOString() });
 });
 
 app.use("/api/auth", authRoutes);
-app.use("/api/partners", partnersRoutes);
-app.use("/api/owners", ownersRoutes); // legacy alias for tests/older code
+app.use("/api/bookings", bookingRoutes);
+app.use("/api/drivers", driverRoutes);
+app.use("/api/owners", ownerRoutes);
+app.use("/api/partners", partnerRoutes);
 
-app.use("/api/drivers", driversRoutes);
-app.use("/api/bookings", bookingsRoutes);
-
-app.use(errorHandler);
-
-async function start() {
-  if (config.mongoUri) {
-    await mongoose.connect(config.mongoUri);
-    console.log("Connected to MongoDB");
-  } else {
-    console.warn("MongoDB URI not set (MONGO_URI/MONGODB_URI). Using in-memory store.");
-  }
-
-  app.listen(config.port, () => {
-    console.log(`API running on http://localhost:${config.port}`);
-  });
-}
-
-// Export app for tests (supertest) and start server only when run directly
-module.exports = app;
-
-if (require.main === module) {
-  start().catch((err) => {
-    console.error("Server start error:", err);
-    process.exitCode = 1;
-  });
-}
+app.listen(config.port, () => {
+  console.log(`Shifty API running on http://localhost:${config.port}`);
+});

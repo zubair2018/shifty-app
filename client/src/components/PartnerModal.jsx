@@ -1,176 +1,133 @@
-// src/components/PartnerModal.jsx
 import { useState } from "react";
 
-const API_BASE = "http://localhost:4000";
-
-const initialForm = {
-  name: "",
-  phone: "",
-  city: "",
-  truckType: "",
-  truckCategory: "mini",
-  notes: "",
-  aadharNumber: "",
-  dlNumber: "",
-};
-
 const PartnerModal = ({ onClose }) => {
-  const [form, setForm] = useState(initialForm);
-  const [status, setStatus] = useState("");
+  const [form, setForm] = useState({
+    name: "",
+    phone: "",
+    city: "",
+    truckTypes: "",
+    fleetSize: "",
+    drivingLicenseNo: "",
+    aadharNumber: "",
+  });
+  const [status, setStatus] = useState("idle");
+  const [error, setError] = useState("");
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm((f) => ({ ...f, [name]: value }));
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setStatus("Submitting...");
+    setError("");
+
+    if (!form.name || !form.phone || !form.city) {
+      setError("Please fill all required fields.");
+      return;
+    }
 
     try {
-      const res = await fetch(`${API_BASE}/api/drivers`, {
+      setStatus("loading");
+
+      const res = await fetch("/api/partners", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
 
       if (!res.ok) {
-        setStatus("Could not submit. Try again.");
-        return;
+        throw new Error("Failed");
       }
 
-      setStatus("Submitted. We will contact you soon.");
-      setForm(initialForm);
+      setStatus("success");
+      setTimeout(() => onClose(), 1200);
     } catch (err) {
-      setStatus("Something went wrong. Try again.");
+      setStatus("error");
+      setError("Could not submit details. Please try again.");
     }
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60">
-      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl bg-slate-950 border border-slate-800 p-4">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-sm font-semibold text-slate-50">
-            Become a Shifty partner
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur">
+      <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-slate-100">
+            Partner with Shifty
           </h2>
-          <button
-            onClick={onClose}
-            className="text-xs text-slate-400 hover:text-slate-200"
-          >
-            Close
+          <button onClick={onClose} className="text-slate-400 text-sm">
+            ✕
           </button>
         </div>
 
-        <p className="text-[11px] text-slate-400 mb-3">
-          Share your details. We&apos;ll verify you once, then send you trips
-          whenever you&apos;re online.
-        </p>
+        <form onSubmit={handleSubmit} className="space-y-3 text-[12px]">
+          <input
+            name="name"
+            value={form.name}
+            onChange={handleChange}
+            placeholder="Your name"
+            className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-slate-100 text-[12px]"
+          />
+          <input
+            name="phone"
+            value={form.phone}
+            onChange={handleChange}
+            placeholder="Phone number"
+            className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-slate-100 text-[12px]"
+          />
+          <input
+            name="city"
+            value={form.city}
+            onChange={handleChange}
+            placeholder="City / base location"
+            className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-slate-100 text-[12px]"
+          />
+          <input
+            name="truckTypes"
+            value={form.truckTypes}
+            onChange={handleChange}
+            placeholder="Truck types (e.g. 407, 1109, 32ft)"
+            className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-slate-100 text-[12px]"
+          />
+          <input
+            name="fleetSize"
+            value={form.fleetSize}
+            onChange={handleChange}
+            placeholder="Approx. number of trucks"
+            className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-slate-100 text-[12px]"
+          />
 
-        <form onSubmit={handleSubmit} className="space-y-3 text-xs">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block mb-1 text-slate-300">Name</label>
-              <input
-                name="name"
-                value={form.name}
-                onChange={handleChange}
-                className="w-full rounded-md bg-slate-900 border border-slate-700 px-2 py-1.5"
-                required
-              />
-            </div>
-            <div>
-              <label className="block mb-1 text-slate-300">Phone</label>
-              <input
-                name="phone"
-                value={form.phone}
-                onChange={handleChange}
-                className="w-full rounded-md bg-slate-900 border border-slate-700 px-2 py-1.5"
-                required
-              />
-            </div>
-          </div>
+          <input
+            name="drivingLicenseNo"
+            value={form.drivingLicenseNo}
+            onChange={handleChange}
+            placeholder="Driving license number"
+            className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-slate-100 text-[12px]"
+          />
+          <input
+            name="aadharNumber"
+            value={form.aadharNumber}
+            onChange={handleChange}
+            placeholder="Aadhar number"
+            className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-slate-100 text-[12px]"
+          />
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block mb-1 text-slate-300">City</label>
-              <input
-                name="city"
-                value={form.city}
-                onChange={handleChange}
-                className="w-full rounded-md bg-slate-900 border border-slate-700 px-2 py-1.5"
-                required
-              />
-            </div>
-            <div>
-              <label className="block mb-1 text-slate-300">Truck category</label>
-              <select
-                name="truckCategory"
-                value={form.truckCategory}
-                onChange={handleChange}
-                className="w-full rounded-md bg-slate-900 border border-slate-700 px-2 py-1.5"
-              >
-                <option value="mini">Mini</option>
-                <option value="medium">Medium</option>
-                <option value="heavy">Heavy</option>
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="block mb-1 text-slate-300">Truck type</label>
-            <input
-              name="truckType"
-              value={form.truckType}
-              onChange={handleChange}
-              placeholder="Tata Ace, 14 ft, 32 ft container..."
-              className="w-full rounded-md bg-slate-900 border border-slate-700 px-2 py-1.5"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block mb-1 text-slate-300">Aadhar (optional)</label>
-              <input
-                name="aadharNumber"
-                value={form.aadharNumber}
-                onChange={handleChange}
-                className="w-full rounded-md bg-slate-900 border border-slate-700 px-2 py-1.5"
-              />
-            </div>
-            <div>
-              <label className="block mb-1 text-slate-300">DL number (optional)</label>
-              <input
-                name="dlNumber"
-                value={form.dlNumber}
-                onChange={handleChange}
-                className="w-full rounded-md bg-slate-900 border border-slate-700 px-2 py-1.5"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block mb-1 text-slate-300">
-              Notes (routes, timings, etc.)
-            </label>
-            <textarea
-              name="notes"
-              value={form.notes}
-              onChange={handleChange}
-              rows={3}
-              className="w-full rounded-md bg-slate-900 border border-slate-700 px-2 py-1.5"
-            />
-          </div>
+          {error && (
+            <p className="text-[11px] text-red-400">{error}</p>
+          )}
+          {status === "success" && (
+            <p className="text-[11px] text-emerald-400">
+              Thanks! Our team will reach out to you soon.
+            </p>
+          )}
 
           <button
             type="submit"
-            className="w-full mt-1 rounded-full bg-yellow-400 text-slate-950 font-semibold py-2 text-xs hover:bg-yellow-300"
+            disabled={status === "loading"}
+            className="w-full rounded-full bg-yellow-400 py-2 text-[12px] font-semibold text-slate-950 hover:bg-yellow-300 disabled:opacity-70"
           >
-            Submit details
+            {status === "loading" ? "Submitting..." : "Submit details"}
           </button>
-
-          {status && (
-            <p className="mt-1 text-[11px] text-slate-400">{status}</p>
-          )}
         </form>
       </div>
     </div>
