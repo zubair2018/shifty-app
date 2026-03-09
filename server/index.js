@@ -1,29 +1,27 @@
 // server/index.js
 import express from "express";
-import cors from "cors";
-import { config } from "./config.js";
-
-import bookingRoutes from "./routes/bookings.js";
-import driverRoutes from "./routes/drivers.js";
-import ownerRoutes from "./routes/owners.js";
-import partnerRoutes from "./routes/partners.js";
-import authRoutes from "./routes/auth.js";
+import "./firebaseAdmin.js"; // ensure Firebase initializes
+import bookingRoutes from "./routes/bookingRoutes.js";
 
 const app = express();
+const PORT = process.env.PORT || 4000;
 
-app.use(cors());
+// Middleware to parse JSON
 app.use(express.json());
 
-app.get("/health", (_req, res) => {
-  res.json({ ok: true, time: new Date().toISOString() });
+// Root route so "/" works
+app.get("/", (req, res) => {
+  res.send("Shifty API is running");
 });
 
-app.use("/api/auth", authRoutes);
-app.use("/api/bookings", bookingRoutes);
-app.use("/api/drivers", driverRoutes);
-app.use("/api/owners", ownerRoutes);
-app.use("/api/partners", partnerRoutes);
+// Mount booking API
+app.use("/bookings", bookingRoutes);
 
-app.listen(config.port, () => {
-  console.log(`Shifty API running on http://localhost:${config.port}`);
+// 404 fallback
+app.use((req, res) => {
+  res.status(404).json({ error: "Route not found" });
+});
+
+app.listen(PORT, () => {
+  console.log(`Shifty API running on http://localhost:${PORT}`);
 });

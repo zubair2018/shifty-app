@@ -1,51 +1,18 @@
 // server/models/Booking.js
-import { db, nextBookingId } from "../memoryStore.js";
+import { firestore } from "../firebaseAdmin.js";
 
-export function createBooking(data) {
-  const id = nextBookingId();
-  const now = new Date().toISOString();
+const BOOKINGS_COLLECTION = "bookings";
 
-  const booking = {
-    id,
-    customerName: data.customerName,
-    customerPhone: data.customerPhone,
-    pickupAddress: data.pickupAddress,
-    dropAddress: data.dropAddress,
-    date: data.date,
-    time: data.time,
-    truckType: data.truckType || "",   // NEW field
-    loadDetails: data.loadDetails || "",
-    status: "pending",                 // pending | assigned | in_progress | completed | cancelled
-    assignedDriverId: null,
-    createdAt: now,
-    updatedAt: now
-  };
-
-  db.bookings.push(booking);
-  return booking;
+// Example: create a new booking
+async function createBooking(data) {
+  const docRef = await firestore.collection(BOOKINGS_COLLECTION).add(data);
+  return { id: docRef.id, ...data };
 }
 
-export function listBookings() {
-  return db.bookings;
+// Example: get all bookings
+async function getAllBookings() {
+  const snapshot = await firestore.collection(BOOKINGS_COLLECTION).get();
+  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 }
 
-export function getBookingById(id) {
-  return db.bookings.find((b) => b.id === id) || null;
-}
-
-export function setBookingStatus(id, status) {
-  const booking = getBookingById(id);
-  if (!booking) return null;
-  booking.status = status;
-  booking.updatedAt = new Date().toISOString();
-  return booking;
-}
-
-export function assignDriverToBooking(id, driverId) {
-  const booking = getBookingById(id);
-  if (!booking) return null;
-  booking.assignedDriverId = driverId;
-  booking.status = "assigned";
-  booking.updatedAt = new Date().toISOString();
-  return booking;
-}
+export { createBooking, getAllBookings };
