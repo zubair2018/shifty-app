@@ -1,70 +1,32 @@
 // src/api/bookings.js
-import { auth } from "../firebase";
-
 const API_BASE = "http://localhost:4000";
 
-async function getIdTokenOrThrow() {
-  const user = auth.currentUser;
-  if (!user) {
-    throw new Error("Not logged in");
-  }
-  return user.getIdToken();
-}
-
-export async function createBookingApi({ pickup, drop, time }) {
-  const idToken = await getIdTokenOrThrow();
+export async function createBookingApi(form) {
+  // Map your form fields to what backend needs + keep extra info
+  const payload = {
+    pickup: form.pickupAddress,
+    drop: form.dropAddress,
+    time: `${form.date} ${form.time}`,
+    customerName: form.customerName,
+    customerPhone: form.customerPhone,
+    truckType: form.truckType,
+    loadDetails: form.loadDetails,
+  };
 
   const res = await fetch(`${API_BASE}/bookings`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${idToken}`,
-    },
-    body: JSON.stringify({ pickup, drop, time }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
   });
 
-  const data = await res.json().catch(() => ({}));
+  let data = {};
+  try {
+    data = await res.json();
+  } catch (e) {}
 
   if (!res.ok) {
-    throw new Error(data.error || "Failed to create booking");
+    throw new Error(data.error || `Failed to create booking (${res.status})`);
   }
 
-  return data;
-}
-
-export async function getMyBookingsApi() {
-  const idToken = await getIdTokenOrThrow();
-
-  const res = await fetch(`${API_BASE}/bookings`, {
-    headers: {
-      Authorization: `Bearer ${idToken}`,
-    },
-  });
-
-  const data = await res.json().catch(() => ({}));
-
-  if (!res.ok) {
-    throw new Error(data.error || "Failed to fetch bookings");
-  }
-
-  return data;
-}
-
-export async function cancelBookingApi(id) {
-  const idToken = await getIdTokenOrThrow();
-
-  const res = await fetch(`${API_BASE}/bookings/${id}`, {
-    method: "DELETE",
-    headers: {
-      Authorization: `Bearer ${idToken}`,
-    },
-  });
-
-  const data = await res.json().catch(() => ({}));
-
-  if (!res.ok) {
-    throw new Error(data.error || "Failed to cancel booking");
-  }
-
-  return data;
+  return data; // { id, ...payload, status, createdAt }
 }

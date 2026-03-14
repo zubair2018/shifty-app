@@ -2,15 +2,11 @@
 import express from "express";
 import {
   createBooking,
-  getBookingsByUser,
+  getAllBookings,
   cancelBooking,
 } from "../models/Booking.js";
-import { authMiddleware } from "../middleware/auth.js";
 
 const router = express.Router();
-
-// All booking routes require auth
-router.use(authMiddleware);
 
 // POST /bookings - create a booking
 router.post("/", async (req, res) => {
@@ -23,13 +19,7 @@ router.post("/", async (req, res) => {
         .json({ error: "pickup, drop and time are required" });
     }
 
-    const booking = await createBooking({
-      userId: req.user.uid,
-      pickup,
-      drop,
-      time,
-    });
-
+    const booking = await createBooking(req.body);
     res.status(201).json(booking);
   } catch (err) {
     console.error("Error creating booking:", err);
@@ -37,10 +27,10 @@ router.post("/", async (req, res) => {
   }
 });
 
-// GET /bookings - see your bookings
+// GET /bookings - list all bookings
 router.get("/", async (req, res) => {
   try {
-    const bookings = await getBookingsByUser(req.user.uid);
+    const bookings = await getAllBookings();
     res.json(bookings);
   } catch (err) {
     console.error("Error fetching bookings:", err);
@@ -52,14 +42,10 @@ router.get("/", async (req, res) => {
 router.delete("/:id", async (req, res) => {
   try {
     const id = req.params.id;
-    const result = await cancelBooking(id, req.user.uid);
+    const result = await cancelBooking(id);
 
     if (!result.ok && result.reason === "not_found") {
       return res.status(404).json({ error: "Booking not found" });
-    }
-
-    if (!result.ok && result.reason === "forbidden") {
-      return res.status(403).json({ error: "Not allowed to cancel this booking" });
     }
 
     res.json({ success: true });

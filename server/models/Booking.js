@@ -8,30 +8,30 @@ async function createBooking(data) {
   const now = new Date().toISOString();
 
   const booking = {
-    userId: data.userId,
     pickup: data.pickup,
     drop: data.drop,
     time: data.time,
     status: "active",
     createdAt: now,
+    // extra fields from frontend (optional)
+    customerName: data.customerName || "",
+    customerPhone: data.customerPhone || "",
+    truckType: data.truckType || "",
+    loadDetails: data.loadDetails || "",
   };
 
   const docRef = await firestore.collection(BOOKINGS_COLLECTION).add(booking);
   return { id: docRef.id, ...booking };
 }
 
-// Get all bookings for a specific user
-async function getBookingsByUser(userId) {
-  const snapshot = await firestore
-    .collection(BOOKINGS_COLLECTION)
-    .where("userId", "==", userId)
-    .get();
-
+// Get all bookings
+async function getAllBookings() {
+  const snapshot = await firestore.collection(BOOKINGS_COLLECTION).get();
   return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 }
 
 // Cancel a booking (mark status = "cancelled")
-async function cancelBooking(id, userId) {
+async function cancelBooking(id) {
   const docRef = firestore.collection(BOOKINGS_COLLECTION).doc(id);
   const doc = await docRef.get();
 
@@ -39,14 +39,8 @@ async function cancelBooking(id, userId) {
     return { ok: false, reason: "not_found" };
   }
 
-  const data = doc.data();
-
-  if (data.userId !== userId) {
-    return { ok: false, reason: "forbidden" };
-  }
-
   await docRef.update({ status: "cancelled" });
   return { ok: true };
 }
 
-export { createBooking, getBookingsByUser, cancelBooking };
+export { createBooking, getAllBookings, cancelBooking };

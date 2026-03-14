@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { createDriverApi } from "../api/drivers";
+
 
 const PartnerModal = ({ onClose }) => {
   const [form, setForm] = useState({
@@ -17,36 +19,31 @@ const PartnerModal = ({ onClose }) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   };
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setError("");
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
+  // basic required checks (adjust names to your state)
+  if (!form.name || !form.phone || !form.city) {
+    setError("Please fill all required fields.");
+    return;
+  }
 
-    if (!form.name || !form.phone || !form.city) {
-      setError("Please fill all required fields.");
-      return;
-    }
+  try {
+    setStatus("loading");
+    await createDriverApi(form);
+    setStatus("success");
+    setTimeout(() => {
+      setStatus("idle");
+      onClose && onClose();
+    }, 1200);
+  } catch (err) {
+    console.error("Partner submit failed:", err);
+    setStatus("error");
+    setError("Could not submit details. Please try again.");
+  }
+};
 
-    try {
-      setStatus("loading");
-
-      const res = await fetch("/api/partners", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-
-      if (!res.ok) {
-        throw new Error("Failed");
-      }
-
-      setStatus("success");
-      setTimeout(() => onClose(), 1200);
-    } catch (err) {
-      setStatus("error");
-      setError("Could not submit details. Please try again.");
-    }
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur">

@@ -1,4 +1,6 @@
+// src/components/BookingModal.jsx
 import { useState } from "react";
+import { createBookingApi } from "../api/bookings";
 
 const BookingModal = ({ onClose }) => {
   const [form, setForm] = useState({
@@ -9,7 +11,7 @@ const BookingModal = ({ onClose }) => {
     date: "",
     time: "",
     truckType: "",
-    loadDetails: ""
+    loadDetails: "",
   });
 
   const [status, setStatus] = useState("idle"); // idle | loading | success | error
@@ -39,19 +41,20 @@ const BookingModal = ({ onClose }) => {
     try {
       setStatus("loading");
 
-      const res = await fetch("/api/bookings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form)
-      });
-
-      if (!res.ok) {
-        throw new Error("Failed");
-      }
+      // Call backend via helper
+      await createBookingApi(form);
 
       setStatus("success");
-      setTimeout(() => onClose(), 1200);
+      // Optional: clear form as well
+      // setForm({ ...initial values... });
+
+      // Close after a short delay
+      setTimeout(() => {
+        setStatus("idle");
+        onClose && onClose();
+      }, 1200);
     } catch (err) {
+      console.error("Booking submit failed:", err);
       setStatus("error");
       setError("Could not submit booking. Please try again.");
     }
