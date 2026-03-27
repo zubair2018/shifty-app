@@ -14,11 +14,16 @@ const BookingModal = ({ onClose }) => {
     loadDetails: "",
   });
 
-  const [status, setStatus] = useState("idle"); // idle | loading | success | error
+  const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === "customerPhone") {
+      const digits = value.replace(/\D/g, "").slice(0, 10);
+      setForm((prev) => ({ ...prev, customerPhone: digits }));
+      return;
+    }
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -37,18 +42,15 @@ const BookingModal = ({ onClose }) => {
       setError("Please fill all required fields.");
       return;
     }
+    if (form.customerPhone.length !== 10) {
+      setError("Enter a valid 10-digit phone number.");
+      return;
+    }
 
     try {
       setStatus("loading");
-
-      // Call backend via helper
       await createBookingApi(form);
-
       setStatus("success");
-      // Optional: clear form as well
-      // setForm({ ...initial values... });
-
-      // Close after a short delay
       setTimeout(() => {
         setStatus("idle");
         onClose && onClose();
@@ -64,16 +66,8 @@ const BookingModal = ({ onClose }) => {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur">
       <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-5">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-slate-100">
-            Book a truck
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-slate-400 text-sm"
-          >
-            ✕
-          </button>
+          <h2 className="text-sm font-semibold text-slate-100">Book a truck</h2>
+          <button type="button" onClick={onClose} className="text-slate-400 text-sm">✕</button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3 text-[12px]">
@@ -81,23 +75,30 @@ const BookingModal = ({ onClose }) => {
             name="customerName"
             value={form.customerName}
             onChange={handleChange}
-            placeholder="Your name"
+            placeholder="Your name *"
             className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-slate-100 text-[12px] placeholder:text-slate-500"
           />
 
-          <input
-            name="customerPhone"
-            value={form.customerPhone}
-            onChange={handleChange}
-            placeholder="Phone number"
-            className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-slate-100 text-[12px] placeholder:text-slate-500"
-          />
+          {/* Phone with +91 prefix */}
+          <div className="flex">
+            <span className="bg-slate-700 border border-slate-600 border-r-0 rounded-l-md px-3 flex items-center text-slate-300 text-[12px] font-medium">
+              +91
+            </span>
+            <input
+              name="customerPhone"
+              value={form.customerPhone}
+              onChange={handleChange}
+              placeholder="10-digit number *"
+              type="tel"
+              className="flex-1 rounded-r-md bg-slate-950 border border-slate-700 px-3 py-2 text-slate-100 text-[12px] placeholder:text-slate-500"
+            />
+          </div>
 
           <input
             name="pickupAddress"
             value={form.pickupAddress}
             onChange={handleChange}
-            placeholder="Pickup location"
+            placeholder="Pickup location *"
             className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-slate-100 text-[12px] placeholder:text-slate-500"
           />
 
@@ -105,7 +106,7 @@ const BookingModal = ({ onClose }) => {
             name="dropAddress"
             value={form.dropAddress}
             onChange={handleChange}
-            placeholder="Drop location"
+            placeholder="Drop location *"
             className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-slate-100 text-[12px] placeholder:text-slate-500"
           />
 
@@ -142,19 +143,14 @@ const BookingModal = ({ onClose }) => {
             name="loadDetails"
             value={form.loadDetails}
             onChange={handleChange}
-            placeholder="How many tons or what type of load?"
-            className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-slate-100 text-[12px] placeholder:text-slate-500 h-20"
+            placeholder="Load details (type, weight etc.)"
+            className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-slate-100 text-[12px] placeholder:text-slate-500 h-16"
           />
 
-          {error && (
-            <p className="text-[11px] text-red-400">
-              {error}
-            </p>
-          )}
-
+          {error && <p className="text-[11px] text-red-400">{error}</p>}
           {status === "success" && (
             <p className="text-[11px] text-emerald-400">
-              Booking received. We will contact you soon.
+              Booking received! We will contact you soon.
             </p>
           )}
 

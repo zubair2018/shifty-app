@@ -18,6 +18,8 @@ import PartnerModal from "./components/PartnerModal";
 import Plans from "./components/Plans";
 import AdminPage from "./AdminPage";
 import DriverPage from "./DriverPage";
+import DriverLoginPage from "./DriverLoginPage";
+import DriverAuthGuard from "./DriverAuthGuard";
 
 // Main landing page layout (your existing homepage)
 function MainLanding() {
@@ -76,11 +78,23 @@ function App() {
       {/* Home / landing */}
       <Route path="/" element={<MainLanding />} />
 
-      {/* Admin and Driver pages */}
+      {/* Admin page */}
       <Route path="/admin" element={<AdminPage />} />
-      <Route path="/driver" element={<DriverPage />} />
 
-      {/* Catch-all: if URL is /shif-T-/ or anything else, show landing */}
+      {/* Driver login page */}
+      <Route path="/driver/login" element={<DriverLoginPage />} />
+
+      {/* Driver dashboard - protected */}
+      <Route
+        path="/driver"
+        element={
+          <DriverAuthGuard>
+            <DriverPage />
+          </DriverAuthGuard>
+        }
+      />
+
+      {/* Catch-all */}
       <Route path="*" element={<MainLanding />} />
     </Routes>
   );

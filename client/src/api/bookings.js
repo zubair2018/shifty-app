@@ -2,14 +2,13 @@
 const API_BASE = "http://localhost:4000";
 
 export async function createBookingApi(form) {
-  // Map your form fields to what backend needs + keep extra info
   const payload = {
+    name: form.customerName,        // ✅ backend expects "name"
+    phone: form.customerPhone,      // ✅ backend expects "phone"
     pickup: form.pickupAddress,
     drop: form.dropAddress,
     time: `${form.date} ${form.time}`,
-    customerName: form.customerName,
-    customerPhone: form.customerPhone,
-    truckType: form.truckType,
+    vehicleType: form.truckType,
     loadDetails: form.loadDetails,
   };
 
@@ -28,5 +27,5 @@ export async function createBookingApi(form) {
     throw new Error(data.error || `Failed to create booking (${res.status})`);
   }
 
-  return data; // { id, ...payload, status, createdAt }
+  return data;
 }
