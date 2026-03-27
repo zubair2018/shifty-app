@@ -1,10 +1,11 @@
 // src/DriverPage.jsx
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { onAuthStateChanged, signOut } from "firebase/auth";
-import { auth } from "./firebase";
 
 const API_BASE = "http://localhost:4000";
+
+// ⚠️ TEMPORARY: Replace with real Firestore driver doc ID
+// This will be replaced with Firebase Auth later
+const DRIVER_ID = "U7oUSgVxRLRJuP7lc0gJ";
 
 async function fetchJson(url, options) {
   const res = await fetch(url, options);
@@ -30,11 +31,10 @@ function StatusBadge({ status }) {
   );
 }
 
-function BookingDetailModal({ booking, onClose, onAccept, onRelease, driverId }) {
-  const isMyBooking = booking.driverId === driverId;
+function BookingDetailModal({ booking, onClose, onAccept, onRelease }) {
   const isPending = booking.status === "pending";
-  const isAssignedToMe = booking.status === "assigned" && booking.driverId === driverId;
-  const isAcceptedByMe = booking.status === "accepted" && booking.driverId === driverId;
+  const isAssigned = booking.status === "assigned" && booking.driverId === DRIVER_ID;
+  const isAccepted = booking.status === "accepted" && booking.driverId === DRIVER_ID;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur p-4">
@@ -46,41 +46,18 @@ function BookingDetailModal({ booking, onClose, onAccept, onRelease, driverId })
 
         <div className="space-y-3 text-sm">
           <div className="bg-slate-800 rounded-lg p-3 space-y-2">
-            <div className="flex justify-between">
-              <span className="text-slate-400">Customer</span>
-              <span className="text-white font-medium">{booking.name || "N/A"}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">Phone</span>
-              <span className="text-white">{booking.phone || "N/A"}</span>
-            </div>
+            <Row label="Customer" value={booking.name} />
+            <Row label="Phone" value={`+91${booking.phone}`} />
           </div>
-
           <div className="bg-slate-800 rounded-lg p-3 space-y-2">
-            <div className="flex justify-between">
-              <span className="text-slate-400">Pickup</span>
-              <span className="text-white font-medium">{booking.pickup || "N/A"}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">Drop</span>
-              <span className="text-white font-medium">{booking.drop || "N/A"}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">Time</span>
-              <span className="text-white">{booking.time || "N/A"}</span>
-            </div>
+            <Row label="Pickup" value={booking.pickup} bold />
+            <Row label="Drop" value={booking.drop} bold />
+            <Row label="Time" value={booking.time} />
           </div>
-
           <div className="bg-slate-800 rounded-lg p-3 space-y-2">
-            <div className="flex justify-between">
-              <span className="text-slate-400">Vehicle</span>
-              <span className="text-white">{booking.vehicleType || "N/A"}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">Load details</span>
-              <span className="text-white">{booking.loadDetails || "N/A"}</span>
-            </div>
-            <div className="flex justify-between">
+            <Row label="Vehicle" value={booking.vehicleType} />
+            <Row label="Load" value={booking.loadDetails || "N/A"} />
+            <div className="flex justify-between items-center">
               <span className="text-slate-400">Status</span>
               <StatusBadge status={booking.status} />
             </div>
@@ -88,25 +65,25 @@ function BookingDetailModal({ booking, onClose, onAccept, onRelease, driverId })
         </div>
 
         <div className="flex gap-2 pt-1">
-          {(isPending || isAssignedToMe) && (
+          {(isPending || isAssigned) && (
             <button
               onClick={() => onAccept(booking.id)}
-              className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm transition"
+              className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm"
             >
-              Accept Load
+              ✅ Accept Load
             </button>
           )}
-          {isAcceptedByMe && (
+          {isAccepted && (
             <button
               onClick={() => onRelease(booking.id)}
-              className="flex-1 py-2.5 rounded-xl bg-rose-700 hover:bg-rose-600 text-white font-semibold text-sm transition"
+              className="flex-1 py-2.5 rounded-xl bg-rose-700 hover:bg-rose-600 text-white font-semibold text-sm"
             >
-              Release Load
+              🔄 Release Load
             </button>
           )}
           <button
             onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl border border-slate-600 text-slate-300 hover:bg-slate-800 text-sm transition"
+            className="flex-1 py-2.5 rounded-xl border border-slate-600 text-slate-300 hover:bg-slate-800 text-sm"
           >
             Close
           </button>
@@ -116,100 +93,52 @@ function BookingDetailModal({ booking, onClose, onAccept, onRelease, driverId })
   );
 }
 
+function Row({ label, value, bold }) {
+  return (
+    <div className="flex justify-between">
+      <span className="text-slate-400">{label}</span>
+      <span className={`text-white ${bold ? "font-semibold" : ""}`}>{value || "N/A"}</span>
+    </div>
+  );
+}
+
 export default function DriverPage() {
+  const [allBookings, setAllBookings] = useState([]);
   const [cityBookings, setCityBookings] = useState([]);
-  const [activeBookings, setActiveBookings] = useState([]);
-  const [completedBookings, setCompletedBookings] = useState([]);
+  const [driverInfo, setDriverInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [driverId, setDriverId] = useState(null);
-  const [driverName, setDriverName] = useState("");
-  const [driverCity, setDriverCity] = useState("");
-  const [driverTruckTypes, setDriverTruckTypes] = useState("");
+  const [activeTab, setActiveTab] = useState("available");
   const [selectedBooking, setSelectedBooking] = useState(null);
-  const [activeTab, setActiveTab] = useState("city");
-  const navigate = useNavigate();
 
-  // Auth check + load driver profile
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      if (!user) { navigate("/driver/login"); return; }
-
-      try {
-        // Find driver by authUid first
-        let res = await fetch(`${API_BASE}/drivers?authUid=${user.uid}`);
-        let data = await res.json();
-
-        // If not found by authUid, try matching by phone number
-        if (!data || data.length === 0) {
-          const phone = user.phoneNumber || "";
-          const digits = phone.replace(/\D/g, "").slice(-10);
-          const allRes = await fetch(`${API_BASE}/drivers`);
-          const allDrivers = await allRes.json();
-          data = allDrivers.filter((d) => {
-            const dDigits = (d.phone || "").replace(/\D/g, "").slice(-10);
-            return dDigits === digits;
-          });
-        }
-
-        if (data.length > 0) {
-          const driver = data[0];
-          setDriverId(driver.id);
-          setDriverName(driver.name || "Driver");
-          setDriverCity(driver.city || "");
-          setDriverTruckTypes(driver.truckTypes || "");
-
-          // Link authUid if not yet linked
-          if (!driver.authUid) {
-            await fetch(`${API_BASE}/drivers/${driver.id}/link-auth`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ authUid: user.uid }),
-            });
-          }
-        } else {
-          setError("No driver account found for this phone number. Please register first via the Partner form.");
-          setLoading(false);
-        }
-      } catch (err) {
-        setError("Failed to load driver profile.");
-        setLoading(false);
-      }
-    });
-    return unsub;
+    loadAll();
   }, []);
 
-  useEffect(() => {
-    if (driverId && driverCity) loadAllBookings();
-  }, [driverId, driverCity]);
-
-  const loadAllBookings = async () => {
+  const loadAll = async () => {
     try {
       setLoading(true);
       setError("");
 
-      // City pool — filtered by city + truck type
-      const cityData = await fetchJson(
-        `${API_BASE}/bookings/city/${encodeURIComponent(driverCity)}?driverId=${driverId}&truckType=${encodeURIComponent(driverTruckTypes)}`
-      );
+      // Load driver info
+      const driversRes = await fetch(`${API_BASE}/drivers`);
+      const drivers = await driversRes.json();
+      const me = drivers.find((d) => d.id === DRIVER_ID);
+      if (me) setDriverInfo(me);
 
-      // My bookings
-      const myData = await fetchJson(`${API_BASE}/drivers/${driverId}/bookings`);
+      // Load my bookings
+      const myData = await fetchJson(`${API_BASE}/drivers/${DRIVER_ID}/bookings`);
+      setAllBookings(myData || []);
 
-      setCityBookings(cityData || []);
-
-      // Split my bookings into active and completed
-      const active = (myData || []).filter(
-        (b) => ["assigned", "accepted", "on_trip"].includes(b.status)
-      );
-      const completed = (myData || []).filter(
-        (b) => ["completed", "cancelled"].includes(b.status)
-      );
-
-      setActiveBookings(active);
-      setCompletedBookings(completed);
+      // Load city pool if driver info available
+      if (me?.city) {
+        const cityData = await fetchJson(
+          `${API_BASE}/bookings/city/${encodeURIComponent(me.city)}?driverId=${DRIVER_ID}&truckType=${encodeURIComponent(me.truckTypes || "")}`
+        );
+        setCityBookings(cityData || []);
+      }
     } catch (err) {
-      setError(err.message || "Failed to load bookings");
+      setError(err.message || "Failed to load data");
     } finally {
       setLoading(false);
     }
@@ -217,30 +146,26 @@ export default function DriverPage() {
 
   const handleAccept = async (bookingId) => {
     try {
-      const booking = [...cityBookings, ...activeBookings].find(
-        (b) => b.id === bookingId
-      );
+      const booking = [...cityBookings, ...allBookings].find((b) => b.id === bookingId);
       if (!booking) return;
-
       if (booking.status === "pending") {
         await fetchJson(`${API_BASE}/bookings/${bookingId}/self-assign`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ driverId }),
+          body: JSON.stringify({ driverId: DRIVER_ID }),
         });
-      } else if (booking.status === "assigned") {
+      } else {
         await fetchJson(`${API_BASE}/bookings/${bookingId}/driver-response`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "accept" }),
         });
       }
-
       setSelectedBooking(null);
-      await loadAllBookings();
+      await loadAll();
     } catch (err) {
       alert(err.message || "Failed to accept. Someone else may have taken it.");
-      await loadAllBookings();
+      await loadAll();
     }
   };
 
@@ -250,28 +175,30 @@ export default function DriverPage() {
       await fetchJson(`${API_BASE}/bookings/${bookingId}/release`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ driverId }),
+        body: JSON.stringify({ driverId: DRIVER_ID }),
       });
       setSelectedBooking(null);
-      await loadAllBookings();
+      await loadAll();
     } catch (err) {
-      alert(err.message || "Failed to release booking");
+      alert(err.message || "Failed to release");
     }
   };
 
-  const handleLogout = async () => {
-    await signOut(auth);
-    navigate("/driver/login");
-  };
+  const activeBookings = allBookings.filter((b) =>
+    ["assigned", "accepted", "on_trip"].includes(b.status)
+  );
+  const completedBookings = allBookings.filter((b) =>
+    ["completed", "cancelled"].includes(b.status)
+  );
 
   const tabs = [
-    { key: "city", label: `Available (${cityBookings.length})` },
+    { key: "available", label: `Available (${cityBookings.length})` },
     { key: "active", label: `My Active (${activeBookings.length})` },
     { key: "completed", label: `Completed (${completedBookings.length})` },
   ];
 
   const displayBookings =
-    activeTab === "city"
+    activeTab === "available"
       ? cityBookings
       : activeTab === "active"
       ? activeBookings
@@ -286,25 +213,17 @@ export default function DriverPage() {
           <div>
             <h1 className="text-xl font-semibold">Driver Dashboard</h1>
             <p className="text-xs text-slate-400">
-              {driverName
-                ? `${driverName} · ${driverCity} · ${driverTruckTypes || "N/A"}`
-                : "Loading profile..."}
+              {driverInfo
+                ? `${driverInfo.name} · ${driverInfo.city} · ${driverInfo.truckTypes || "N/A"}`
+                : "Loading..."}
             </p>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={loadAllBookings}
-              className="px-3 py-1.5 text-xs rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800"
-            >
-              Refresh
-            </button>
-            <button
-              onClick={handleLogout}
-              className="px-3 py-1.5 text-xs rounded-lg border border-rose-700 bg-rose-900/20 text-rose-300 hover:bg-rose-900/40"
-            >
-              Logout
-            </button>
-          </div>
+          <button
+            onClick={loadAll}
+            className="px-3 py-1.5 text-xs rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800"
+          >
+            Refresh
+          </button>
         </header>
 
         {/* Tabs */}
@@ -331,17 +250,19 @@ export default function DriverPage() {
           </div>
         )}
 
-        {/* Booking list */}
+        {/* List */}
         {loading ? (
           <p className="text-sm text-slate-400">Loading...</p>
         ) : displayBookings.length === 0 ? (
-          <p className="text-sm text-slate-400">
-            {activeTab === "city"
-              ? `No available loads in ${driverCity} matching your truck type right now.`
-              : activeTab === "active"
-              ? "No active loads right now."
-              : "No completed loads yet."}
-          </p>
+          <div className="text-center py-12">
+            <p className="text-slate-400 text-sm">
+              {activeTab === "available"
+                ? "No available loads in your area right now."
+                : activeTab === "active"
+                ? "No active loads."
+                : "No completed loads yet."}
+            </p>
+          </div>
         ) : (
           <div className="space-y-3">
             {displayBookings.map((b) => (
@@ -351,38 +272,34 @@ export default function DriverPage() {
                 className="border border-slate-800 rounded-xl p-4 bg-slate-900/50 hover:bg-slate-900 cursor-pointer transition"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div className="space-y-1">
+                  <div className="space-y-1 flex-1">
                     <div className="text-sm font-semibold text-white">
-                      {b.pickup || "?"} → {b.drop || "?"}
+                      {b.pickup} → {b.drop}
                     </div>
                     <div className="text-[11px] text-slate-400">
-                      {b.name || "Customer"} · {b.vehicleType || "N/A"}
+                      👤 {b.name} · 🚛 {b.vehicleType}
                     </div>
                     <div className="text-[11px] text-slate-500">
-                      {b.time || "N/A"}
+                      🕐 {b.time}
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <StatusBadge status={b.status} />
-                    {b.driverId === driverId && (
-                      <span className="text-[10px] text-blue-400">Yours</span>
+                    {b.driverId === DRIVER_ID && (
+                      <span className="text-[10px] text-blue-400 font-medium">Yours</span>
                     )}
                   </div>
                 </div>
-                <div className="mt-2 text-[11px] text-blue-400 font-medium">
-                  Tap to view details →
-                </div>
+                <div className="mt-2 text-[11px] text-blue-400">Tap for details →</div>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* Detail modal */}
       {selectedBooking && (
         <BookingDetailModal
           booking={selectedBooking}
-          driverId={driverId}
           onClose={() => setSelectedBooking(null)}
           onAccept={handleAccept}
           onRelease={handleRelease}

@@ -1,5 +1,5 @@
 // src/DriverLoginPage.jsx
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
 import { auth } from "./firebase";
@@ -11,22 +11,47 @@ export default function DriverLoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const confirmationRef = useRef(null);
+  const recaptchaRef = useRef(null);
   const navigate = useNavigate();
 
-  const setupRecaptcha = () => {
+  // Clean up reCAPTCHA on unmount
+  useEffect(() => {
+    return () => {
+      if (recaptchaRef.current) {
+        try { recaptchaRef.current.clear(); } catch (e) {}
+        recaptchaRef.current = null;
+        window.recaptchaVerifier = null;
+      }
+    };
+  }, []);
+
+  const getRecaptcha = async () => {
+    // Always destroy and recreate
+    if (recaptchaRef.current) {
+      try { recaptchaRef.current.clear(); } catch (e) {}
+      recaptchaRef.current = null;
+    }
     if (window.recaptchaVerifier) {
       try { window.recaptchaVerifier.clear(); } catch (e) {}
       window.recaptchaVerifier = null;
     }
-    window.recaptchaVerifier = new RecaptchaVerifier(
-      auth,
-      "recaptcha-container",
-      {
-        size: "invisible",
-        callback: () => {},
-        "expired-callback": () => { window.recaptchaVerifier = null; },
-      }
-    );
+
+    // Small delay to let DOM settle
+    await new Promise((r) => setTimeout(r, 100));
+
+    const verifier = new RecaptchaVerifier(auth, "recaptcha-container", {
+      size: "invisible",
+      callback: () => {},
+      "expired-callback": () => {
+        recaptchaRef.current = null;
+        window.recaptchaVerifier = null;
+      },
+    });
+
+    await verifier.render();
+    recaptchaRef.current = verifier;
+    window.recaptchaVerifier = verifier;
+    return verifier;
   };
 
   const handleSendOtp = async () => {
@@ -39,17 +64,26 @@ export default function DriverLoginPage() {
     const fullPhone = `+91${digits}`;
     try {
       setLoading(true);
-      setupRecaptcha();
-      const confirmation = await signInWithPhoneNumber(
-        auth,
-        fullPhone,
-        window.recaptchaVerifier
-      );
+      const verifier = await getRecaptcha();
+      const confirmation = await signInWithPhoneNumber(auth, fullPhone, verifier);
       confirmationRef.current = confirmation;
       setStep("otp");
     } catch (err) {
-      setError(err.message || "Failed to send OTP. Try again.");
-      window.recaptchaVerifier = null;
+      console.error("OTP error:", err);
+      if (err.code === "auth/invalid-app-credential") {
+        setError("App credential error. Please refresh the page and try again.");
+      } else if (err.code === "auth/too-many-requests") {
+        setError("Too many attempts. Please wait a few minutes and try again.");
+      } else if (err.code === "auth/billing-not-enabled") {
+        setError("Real OTP requires Firebase Blaze plan. Please upgrade.");
+      } else {
+        setError(err.message || "Failed to send OTP. Please try again.");
+      }
+      if (recaptchaRef.current) {
+        try { recaptchaRef.current.clear(); } catch (e) {}
+        recaptchaRef.current = null;
+        window.recaptchaVerifier = null;
+      }
     } finally {
       setLoading(false);
     }
@@ -66,6 +100,7 @@ export default function DriverLoginPage() {
       await confirmationRef.current.confirm(otp);
       navigate("/driver");
     } catch (err) {
+      console.error("Verify error:", err);
       setError("Invalid OTP. Please try again.");
     } finally {
       setLoading(false);
@@ -76,7 +111,7 @@ export default function DriverLoginPage() {
     <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
       <div className="bg-gray-900 rounded-2xl p-8 w-full max-w-sm shadow-xl border border-gray-800">
         <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-white">Shifty</h1>
+          <h1 className="text-3xl font-bold text-white">ShifT</h1>
           <p className="text-gray-400 mt-1">Driver Login</p>
         </div>
 
@@ -119,9 +154,14 @@ export default function DriverLoginPage() {
         ) : (
           <>
             <p className="text-gray-400 text-sm mb-4">
-              OTP sent to <span className="text-white font-medium">+91{phone}</span>.{" "}
+              OTP sent to{" "}
+              <span className="text-white font-medium">+91{phone}</span>.{" "}
               <button
-                onClick={() => { setStep("phone"); setOtp(""); setError(""); }}
+                onClick={() => {
+                  setStep("phone");
+                  setOtp("");
+                  setError("");
+                }}
                 className="text-blue-400 hover:underline"
               >
                 Change
@@ -146,6 +186,7 @@ export default function DriverLoginPage() {
           </>
         )}
 
+        {/* reCAPTCHA anchor — must always be in DOM */}
         <div id="recaptcha-container"></div>
       </div>
     </div>
