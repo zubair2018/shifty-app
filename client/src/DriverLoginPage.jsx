@@ -11,47 +11,43 @@ export default function DriverLoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const confirmationRef = useRef(null);
-  const recaptchaRef = useRef(null);
   const navigate = useNavigate();
 
-  // Clean up reCAPTCHA on unmount
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (recaptchaRef.current) {
-        try { recaptchaRef.current.clear(); } catch (e) {}
-        recaptchaRef.current = null;
+      if (window.recaptchaVerifier) {
+        try { window.recaptchaVerifier.clear(); } catch (e) {}
         window.recaptchaVerifier = null;
       }
     };
   }, []);
 
-  const getRecaptcha = async () => {
-    // Always destroy and recreate
-    if (recaptchaRef.current) {
-      try { recaptchaRef.current.clear(); } catch (e) {}
-      recaptchaRef.current = null;
-    }
+  const initRecaptcha = async () => {
+    // Always clear existing
     if (window.recaptchaVerifier) {
       try { window.recaptchaVerifier.clear(); } catch (e) {}
       window.recaptchaVerifier = null;
     }
 
-    // Small delay to let DOM settle
-    await new Promise((r) => setTimeout(r, 100));
+    // Use VISIBLE recaptcha — more reliable than invisible
+    window.recaptchaVerifier = new RecaptchaVerifier(
+      auth,
+      "recaptcha-box",
+      {
+        size: "normal",
+        callback: () => {
+          // reCAPTCHA solved
+        },
+        "expired-callback": () => {
+          window.recaptchaVerifier = null;
+          setError("reCAPTCHA expired. Please try again.");
+        },
+      }
+    );
 
-    const verifier = new RecaptchaVerifier(auth, "recaptcha-container", {
-      size: "invisible",
-      callback: () => {},
-      "expired-callback": () => {
-        recaptchaRef.current = null;
-        window.recaptchaVerifier = null;
-      },
-    });
-
-    await verifier.render();
-    recaptchaRef.current = verifier;
-    window.recaptchaVerifier = verifier;
-    return verifier;
+    await window.recaptchaVerifier.render();
+    return window.recaptchaVerifier;
   };
 
   const handleSendOtp = async () => {
@@ -64,24 +60,23 @@ export default function DriverLoginPage() {
     const fullPhone = `+91${digits}`;
     try {
       setLoading(true);
-      const verifier = await getRecaptcha();
+      const verifier = await initRecaptcha();
       const confirmation = await signInWithPhoneNumber(auth, fullPhone, verifier);
       confirmationRef.current = confirmation;
       setStep("otp");
     } catch (err) {
-      console.error("OTP error:", err);
-      if (err.code === "auth/invalid-app-credential") {
-        setError("App credential error. Please refresh the page and try again.");
-      } else if (err.code === "auth/too-many-requests") {
-        setError("Too many attempts. Please wait a few minutes and try again.");
+      console.error("OTP send error:", err);
+      if (err.code === "auth/too-many-requests") {
+        setError("Too many attempts. Wait a few minutes and try again.");
       } else if (err.code === "auth/billing-not-enabled") {
-        setError("Real OTP requires Firebase Blaze plan. Please upgrade.");
+        setError("Please upgrade Firebase to Blaze plan for real OTP.");
+      } else if (err.code === "auth/invalid-phone-number") {
+        setError("Invalid phone number. Check and try again.");
       } else {
-        setError(err.message || "Failed to send OTP. Please try again.");
+        setError("Failed to send OTP. Please refresh and try again.");
       }
-      if (recaptchaRef.current) {
-        try { recaptchaRef.current.clear(); } catch (e) {}
-        recaptchaRef.current = null;
+      if (window.recaptchaVerifier) {
+        try { window.recaptchaVerifier.clear(); } catch (e) {}
         window.recaptchaVerifier = null;
       }
     } finally {
@@ -100,7 +95,7 @@ export default function DriverLoginPage() {
       await confirmationRef.current.confirm(otp);
       navigate("/driver");
     } catch (err) {
-      console.error("Verify error:", err);
+      console.error("OTP verify error:", err);
       setError("Invalid OTP. Please try again.");
     } finally {
       setLoading(false);
@@ -110,11 +105,14 @@ export default function DriverLoginPage() {
   return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
       <div className="bg-gray-900 rounded-2xl p-8 w-full max-w-sm shadow-xl border border-gray-800">
+        
+        {/* Logo */}
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold text-white">ShifT</h1>
-          <p className="text-gray-400 mt-1">Driver Login</p>
+          <p className="text-gray-400 mt-1 text-sm">Driver Login</p>
         </div>
 
+        {/* Error */}
         {error && (
           <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg px-4 py-3 mb-5 text-sm">
             {error}
@@ -122,38 +120,48 @@ export default function DriverLoginPage() {
         )}
 
         {step === "phone" ? (
-          <>
-            <label className="block text-sm text-gray-400 mb-1">Phone Number</label>
-            <div className="flex mb-4">
-              <span className="bg-gray-700 border border-gray-600 border-r-0 rounded-l-lg px-3 flex items-center text-gray-300 text-sm font-medium">
-                +91
-              </span>
-              <input
-                type="tel"
-                placeholder="9876543210"
-                value={phone}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/\D/g, "").slice(0, 10);
-                  setPhone(val);
-                }}
-                onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
-                className="flex-1 bg-gray-800 text-white border border-gray-700 rounded-r-lg px-4 py-3 focus:outline-none focus:border-blue-500"
-              />
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">
+                Phone Number
+              </label>
+              <div className="flex">
+                <span className="bg-gray-700 border border-gray-600 border-r-0 rounded-l-lg px-3 flex items-center text-gray-300 text-sm font-medium">
+                  +91
+                </span>
+                <input
+                  type="tel"
+                  placeholder="9876543210"
+                  value={phone}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, "").slice(0, 10);
+                    setPhone(val);
+                  }}
+                  onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
+                  className="flex-1 bg-gray-800 text-white border border-gray-700 rounded-r-lg px-4 py-3 focus:outline-none focus:border-blue-500 text-sm"
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Use the number you registered with
+              </p>
             </div>
+
+            {/* reCAPTCHA box — visible */}
+            <div className="flex justify-center">
+              <div id="recaptcha-box"></div>
+            </div>
+
             <button
               onClick={handleSendOtp}
-              disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold py-3 rounded-lg transition"
+              disabled={loading || phone.length !== 10}
+              className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition text-sm"
             >
               {loading ? "Sending OTP..." : "Send OTP"}
             </button>
-            <p className="text-center text-xs text-gray-500 mt-4">
-              Use the number you registered with
-            </p>
-          </>
+          </div>
         ) : (
-          <>
-            <p className="text-gray-400 text-sm mb-4">
+          <div className="space-y-4">
+            <div className="bg-gray-800 rounded-lg px-4 py-3 text-sm">
               OTP sent to{" "}
               <span className="text-white font-medium">+91{phone}</span>.{" "}
               <button
@@ -166,28 +174,31 @@ export default function DriverLoginPage() {
               >
                 Change
               </button>
-            </p>
-            <label className="block text-sm text-gray-400 mb-1">Enter OTP</label>
-            <input
-              type="number"
-              placeholder="123456"
-              value={otp}
-              onChange={(e) => setOtp(e.target.value.slice(0, 6))}
-              onKeyDown={(e) => e.key === "Enter" && handleVerifyOtp()}
-              className="w-full bg-gray-800 text-white border border-gray-700 rounded-lg px-4 py-3 mb-4 focus:outline-none focus:border-blue-500"
-            />
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">
+                Enter OTP
+              </label>
+              <input
+                type="number"
+                placeholder="123456"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.slice(0, 6))}
+                onKeyDown={(e) => e.key === "Enter" && handleVerifyOtp()}
+                className="w-full bg-gray-800 text-white border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-green-500 text-sm text-center text-lg tracking-widest"
+              />
+            </div>
+
             <button
               onClick={handleVerifyOtp}
-              disabled={loading}
-              className="w-full bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-semibold py-3 rounded-lg transition"
+              disabled={loading || otp.length !== 6}
+              className="w-full bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition text-sm"
             >
               {loading ? "Verifying..." : "Verify & Login"}
             </button>
-          </>
+          </div>
         )}
-
-        {/* reCAPTCHA anchor — must always be in DOM */}
-        <div id="recaptcha-container"></div>
       </div>
     </div>
   );

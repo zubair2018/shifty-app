@@ -15,7 +15,7 @@ import ContactSection from "./components/ContactSection";
 import Footer from "./components/Footer";
 import BookingModal from "./components/BookingModal";
 import PartnerModal from "./components/PartnerModal";
-import Plans from "./components/Plans";
+//import Plans from "./components/Plans";
 import AdminPage from "./AdminPage";
 import DriverPage from "./DriverPage";
 import DriverLoginPage from "./DriverLoginPage";
@@ -47,7 +47,7 @@ function MainLanding() {
           <HowItWorks />
           <Services />
           <WhyShifty />
-          <Plans />
+          {/* <Plans /> */}
           <TruckOwners onPartnerClick={() => setIsPartnerOpen(true)} />
           <AppDownload />
           <AboutSection />

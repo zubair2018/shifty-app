@@ -72,20 +72,20 @@ async function sendSMS(phone, message) {
     });
     console.log(`✅ SMS sent to ${to} | SID: ${msg.sid}`);
   } catch (err) {
-    console.error(`❌ SMS failed for ${to}:`, err.message);
+    console.error(`❌ SMS failed for ${to}: ${err.message}`);
   }
 }
 
-// ---- SMS: Confirm booking to customer ----
+// ---- SMS: Booking confirmation to customer ----
 async function smsBookingConfirmation(booking) {
   const message =
-    `ShifT: Booking Confirmed!\n` +
-    `Hi ${booking.name}, your booking has been received.\n` +
+    `ShifT: Booking Received!\n` +
+    `Hi ${booking.name}, your booking is confirmed.\n` +
     `Pickup: ${booking.pickup}\n` +
     `Drop: ${booking.drop}\n` +
     `Vehicle: ${booking.vehicleType}\n` +
     `Time: ${booking.time}\n` +
-    `We will notify you when a driver is assigned.`;
+    `We will notify you once a driver is assigned.`;
   await sendSMS(booking.phone, message);
 }
 
@@ -130,17 +130,16 @@ async function smsNotifyMatchingDrivers(booking) {
   }
 }
 
-// ---- SMS: Notify customer when driver is assigned ----
+// ---- SMS: Notify customer when driver assigned ----
 async function smsDriverAssignedToCustomer(booking, driver) {
   const message =
     `ShifT: Driver Assigned!\n` +
-    `Hi ${booking.name}, a driver has been assigned to your booking.\n` +
+    `Hi ${booking.name}, a driver is on the way.\n` +
     `Driver: ${driver.name}\n` +
     `Phone: +91${driver.phone}\n` +
     `Vehicle: ${driver.truckTypes || booking.vehicleType}\n` +
-    `Pickup: ${booking.pickup} → ${booking.drop}\n` +
-    `Time: ${booking.time}\n` +
-    `Please be ready at pickup location.`;
+    `Route: ${booking.pickup} → ${booking.drop}\n` +
+    `Time: ${booking.time}`;
   await sendSMS(booking.phone, message);
 }
 
@@ -148,11 +147,12 @@ async function smsDriverAssignedToCustomer(booking, driver) {
 async function smsDriverAssigned(driver, booking) {
   const message =
     `ShifT: Load Assigned to You!\n` +
-    `Hi ${driver.name}, a load has been assigned.\n` +
+    `Hi ${driver.name}!\n` +
     `Pickup: ${booking.pickup}\n` +
     `Drop: ${booking.drop}\n` +
     `Vehicle: ${booking.vehicleType}\n` +
-    `Customer: ${booking.name} (+91${booking.phone})\n` +
+    `Customer: ${booking.name}\n` +
+    `Customer Phone: +91${booking.phone}\n` +
     `Time: ${booking.time}\n` +
     `Login: http://localhost:5173/driver`;
   await sendSMS(driver.phone, message);
@@ -219,7 +219,7 @@ app.get("/bookings", async (req, res) => {
   }
 });
 
-// Create booking — auto SMS to customer + matching drivers
+// Create booking — SMS to customer + matching drivers
 app.post("/bookings", async (req, res) => {
   try {
     const { name, phone, pickup, drop, time, vehicleType, loadDetails } = req.body;
@@ -244,7 +244,7 @@ app.post("/bookings", async (req, res) => {
 
     const docRef = await db.collection("bookings").add(booking);
 
-    // Fire and forget — don't block response
+    // Fire and forget
     smsBookingConfirmation(booking);
     smsNotifyMatchingDrivers(booking);
 
@@ -258,7 +258,10 @@ app.post("/bookings", async (req, res) => {
 // Create driver
 app.post("/drivers", async (req, res) => {
   try {
-    const { name, phone, city, truckTypes, fleetSize, drivingLicenseNo, aadharNumber } = req.body;
+    const {
+      name, phone, city, truckTypes,
+      fleetSize, drivingLicenseNo, aadharNumber,
+    } = req.body;
     const missing = requireFields(req.body, ["name", "phone", "city"]);
     if (missing.length > 0) {
       return res.status(400).json({ error: `Missing required fields: ${missing.join(", ")}` });
@@ -369,7 +372,6 @@ app.patch("/bookings/:id/assign-driver", async (req, res) => {
     const booking = { ...bookingSnap.data(), id: req.params.id };
     const driver = { ...driverSnap.data(), id: driverId };
 
-    // SMS both parties
     smsDriverAssigned(driver, booking);
     smsDriverAssignedToCustomer(booking, driver);
 
