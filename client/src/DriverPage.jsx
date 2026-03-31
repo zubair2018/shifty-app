@@ -1,10 +1,9 @@
 // src/DriverPage.jsx
 import React, { useEffect, useState } from "react";
 
-const API_BASE = "http://localhost:4000";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
 
 // ⚠️ TEMPORARY: Replace with real Firestore driver doc ID
-// This will be replaced with Firebase Auth later
 const DRIVER_ID = "U7oUSgVxRLRJuP7lc0gJ";
 
 async function fetchJson(url, options) {
@@ -113,6 +112,9 @@ export default function DriverPage() {
 
   useEffect(() => {
     loadAll();
+    // Auto-refresh every 30 seconds
+    const interval = setInterval(loadAll, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const loadAll = async () => {
@@ -120,17 +122,14 @@ export default function DriverPage() {
       setLoading(true);
       setError("");
 
-      // Load driver info
       const driversRes = await fetch(`${API_BASE}/drivers`);
       const drivers = await driversRes.json();
       const me = drivers.find((d) => d.id === DRIVER_ID);
       if (me) setDriverInfo(me);
 
-      // Load my bookings
       const myData = await fetchJson(`${API_BASE}/drivers/${DRIVER_ID}/bookings`);
       setAllBookings(myData || []);
 
-      // Load city pool if driver info available
       if (me?.city) {
         const cityData = await fetchJson(
           `${API_BASE}/bookings/city/${encodeURIComponent(me.city)}?driverId=${DRIVER_ID}&truckType=${encodeURIComponent(me.truckTypes || "")}`
@@ -198,17 +197,13 @@ export default function DriverPage() {
   ];
 
   const displayBookings =
-    activeTab === "available"
-      ? cityBookings
-      : activeTab === "active"
-      ? activeBookings
-      : completedBookings;
+    activeTab === "available" ? cityBookings :
+    activeTab === "active" ? activeBookings :
+    completedBookings;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
-
-        {/* Header */}
         <header className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold">Driver Dashboard</h1>
@@ -226,7 +221,6 @@ export default function DriverPage() {
           </button>
         </header>
 
-        {/* Tabs */}
         <div className="flex gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
           {tabs.map((tab) => (
             <button
@@ -243,14 +237,12 @@ export default function DriverPage() {
           ))}
         </div>
 
-        {/* Error */}
         {error && (
           <div className="px-3 py-2 rounded-lg bg-rose-500/10 border border-rose-500/40 text-xs text-rose-100">
             {error}
           </div>
         )}
 
-        {/* List */}
         {loading ? (
           <p className="text-sm text-slate-400">Loading...</p>
         ) : displayBookings.length === 0 ? (
@@ -279,9 +271,7 @@ export default function DriverPage() {
                     <div className="text-[11px] text-slate-400">
                       👤 {b.name} · 🚛 {b.vehicleType}
                     </div>
-                    <div className="text-[11px] text-slate-500">
-                      🕐 {b.time}
-                    </div>
+                    <div className="text-[11px] text-slate-500">🕐 {b.time}</div>
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <StatusBadge status={b.status} />

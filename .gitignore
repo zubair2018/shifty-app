@@ -1,21 +1,12 @@
-**/node_modules/
-
-# Env files
-**/.env
-**/.env.*
-
-# Logs
-**/*.log
-
-# Build outputs
-**/dist/
-**/build/
-
-# Test coverage
-**/coverage/
-
-# OS / editor junk
-.DS_Store
-Thumbs.db
-
+# Server
+server/node_modules
+server/.env
 server/serviceAccountKey.json
+
+# Client
+client/node_modules
+client/dist
+
+# General
+.DS_Store
+*.log

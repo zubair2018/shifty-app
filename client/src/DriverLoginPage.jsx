@@ -186,7 +186,7 @@ export default function DriverLoginPage() {
                 value={otp}
                 onChange={(e) => setOtp(e.target.value.slice(0, 6))}
                 onKeyDown={(e) => e.key === "Enter" && handleVerifyOtp()}
-                className="w-full bg-gray-800 text-white border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-green-500 text-sm text-center text-lg tracking-widest"
+                className="w-full bg-gray-800 text-white border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-green-500 text-center text-lg tracking-widest"
               />
             </div>
 

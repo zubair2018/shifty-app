@@ -1,7 +1,7 @@
 // src/AdminPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
 
-const API_BASE = "http://localhost:4000";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
 
 async function fetchJson(url, options) {
   const res = await fetch(url, options);
@@ -61,6 +61,12 @@ export default function AdminPage() {
         setLoading(false);
       }
     })();
+
+    // Auto-refresh every 30 seconds
+    const interval = setInterval(() => {
+      loadData().catch(console.error);
+    }, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleRefresh = async () => {
@@ -167,7 +173,6 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex">
-
       {/* Sidebar */}
       <aside className="hidden md:flex md:flex-col w-60 bg-slate-900/80 border-r border-slate-800">
         <div className="px-5 py-5 border-b border-slate-800">
@@ -187,7 +192,7 @@ export default function AdminPage() {
                   : "text-slate-300 hover:bg-slate-800/60"
               }`}
             >
-              <span>{item.label}</span>
+              <span className="capitalize">{item.key}</span>
               {item.badge && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-500/20 border border-yellow-500/40 text-yellow-300">
                   {item.badge}
@@ -197,19 +202,18 @@ export default function AdminPage() {
           ))}
         </nav>
         <div className="px-4 py-3 border-t border-slate-800 text-[11px] text-slate-500">
-          ShifT v1.0 — Dispatch Platform
+          ShifT v1.0 — Auto-refreshes every 30s
         </div>
       </aside>
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
-
         {/* Topbar */}
         <header className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-10">
           <div>
             <h1 className="text-lg font-semibold capitalize">{activeSection}</h1>
             <p className="text-xs text-slate-400">
-              {bookings.length} bookings · {drivers.length} drivers
+              {bookings.length} bookings · {drivers.length} drivers · auto-refreshing
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -251,7 +255,7 @@ export default function AdminPage() {
 
                   <div className="grid md:grid-cols-2 gap-4">
                     <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
-                      <h2 className="text-sm font-semibold mb-3">Booking Status Breakdown</h2>
+                      <h2 className="text-sm font-semibold mb-3">Booking Status</h2>
                       <div className="space-y-2">
                         {[
                           { label: "Pending", value: analytics.pending, color: "bg-yellow-400" },
@@ -275,7 +279,7 @@ export default function AdminPage() {
                     </div>
 
                     <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
-                      <h2 className="text-sm font-semibold mb-3">Top Pickup Cities</h2>
+                      <h2 className="text-sm font-semibold mb-3">Top Pickup Areas</h2>
                       {analytics.topCities.length === 0 ? (
                         <p className="text-xs text-slate-400">No data yet.</p>
                       ) : (
@@ -296,7 +300,7 @@ export default function AdminPage() {
                     <h2 className="text-sm font-semibold mb-3">Recent Bookings</h2>
                     <div className="space-y-2">
                       {bookings.slice(0, 5).map((b) => (
-                        <div key={b.id} className="flex items-center justify-between text-xs py-1 border-b border-slate-800/50 last:border-0">
+                        <div key={b.id} className="flex items-center justify-between text-xs py-1.5 border-b border-slate-800/50 last:border-0">
                           <div>
                             <span className="text-white font-medium">{b.name}</span>
                             <span className="text-slate-400 ml-2">{b.pickup} → {b.drop}</span>
@@ -348,9 +352,7 @@ export default function AdminPage() {
                       <tbody>
                         {filteredBookings.length === 0 ? (
                           <tr>
-                            <td colSpan={6} className="py-8 text-center text-slate-500">
-                              No bookings found.
-                            </td>
+                            <td colSpan={6} className="py-8 text-center text-slate-500">No bookings found.</td>
                           </tr>
                         ) : (
                           filteredBookings.map((b) => (
@@ -359,9 +361,7 @@ export default function AdminPage() {
                                 <div className="font-medium text-white">{b.name}</div>
                                 <div className="text-slate-400">+91{b.phone}</div>
                               </td>
-                              <td className="py-2 px-2 text-slate-300">
-                                {b.pickup} → {b.drop}
-                              </td>
+                              <td className="py-2 px-2 text-slate-300">{b.pickup} → {b.drop}</td>
                               <td className="py-2 px-2 text-slate-300">{b.vehicleType}</td>
                               <td className="py-2 px-2 text-slate-300">{formatDateTime(b.time)}</td>
                               <td className="py-2 px-2">
@@ -380,22 +380,22 @@ export default function AdminPage() {
                                     </button>
                                   )}
                                   {!["completed", "cancelled"].includes(b.status) && (
-                                    <button
-                                      onClick={() => handleBookingStatus(b.id, "completed")}
-                                      disabled={actionLoading === b.id}
-                                      className="px-2 py-0.5 text-[11px] rounded-full bg-emerald-500/15 text-emerald-200 border border-emerald-500/40 hover:bg-emerald-500/25 disabled:opacity-50"
-                                    >
-                                      Complete
-                                    </button>
-                                  )}
-                                  {!["completed", "cancelled"].includes(b.status) && (
-                                    <button
-                                      onClick={() => handleBookingStatus(b.id, "cancelled")}
-                                      disabled={actionLoading === b.id}
-                                      className="px-2 py-0.5 text-[11px] rounded-full bg-rose-500/10 text-rose-200 border border-rose-500/40 hover:bg-rose-500/20 disabled:opacity-50"
-                                    >
-                                      Cancel
-                                    </button>
+                                    <>
+                                      <button
+                                        onClick={() => handleBookingStatus(b.id, "completed")}
+                                        disabled={actionLoading === b.id}
+                                        className="px-2 py-0.5 text-[11px] rounded-full bg-emerald-500/15 text-emerald-200 border border-emerald-500/40 hover:bg-emerald-500/25 disabled:opacity-50"
+                                      >
+                                        Complete
+                                      </button>
+                                      <button
+                                        onClick={() => handleBookingStatus(b.id, "cancelled")}
+                                        disabled={actionLoading === b.id}
+                                        className="px-2 py-0.5 text-[11px] rounded-full bg-rose-500/10 text-rose-200 border border-rose-500/40 hover:bg-rose-500/20 disabled:opacity-50"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </>
                                   )}
                                 </div>
                               </td>
@@ -432,11 +432,16 @@ export default function AdminPage() {
                                 📍 {d.city} · 📞 +91{d.phone}
                               </div>
                               <div className="text-xs text-slate-500 mt-0.5">
-                                🚛 {d.truckTypes || "N/A"} · Fleet: {d.fleetSize || "N/A"}
+                                🚛 {d.truckTypes || "N/A"}
                               </div>
                               {d.drivingLicenseNo && (
                                 <div className="text-xs text-slate-500 mt-0.5">
-                                  License: {d.drivingLicenseNo}
+                                  🪪 License: {d.drivingLicenseNo}
+                                </div>
+                              )}
+                              {d.aadharNumber && (
+                                <div className="text-xs text-slate-500 mt-0.5">
+                                  🆔 Aadhaar: ****{d.aadharNumber.slice(-4)}
                                 </div>
                               )}
                             </div>
@@ -542,7 +547,7 @@ export default function AdminPage() {
         </main>
       </div>
 
-      {/* Assign Driver Modal */}
+      {/* Assign Modal */}
       {assignModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-sm p-6 space-y-4">
@@ -558,13 +563,11 @@ export default function AdminPage() {
               className="w-full bg-slate-800 text-white border border-slate-700 rounded-lg px-3 py-2 text-sm"
             >
               <option value="">Select an active driver</option>
-              {drivers
-                .filter((d) => d.status === "active")
-                .map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name} — {d.city} ({d.truckTypes || "N/A"})
-                  </option>
-                ))}
+              {drivers.filter((d) => d.status === "active").map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name} — {d.city} ({d.truckTypes || "N/A"})
+                </option>
+              ))}
             </select>
             <div className="flex gap-2">
               <button

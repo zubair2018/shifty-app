@@ -1,17 +1,17 @@
 // src/api/drivers.js
-const API_BASE = "http://localhost:4000";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
 
 export async function createDriverApi(form) {
   const payload = {
     name: form.name,
-    phone: form.phone,
+    phone: form.phone.replace(/\D/g, "").slice(-10),
     city: form.city,
     truckTypes: form.truckTypes || "",
     fleetSize: form.fleetSize || "",
     drivingLicenseNo: form.drivingLicenseNo || "",
     aadharNumber: form.aadharNumber || "",
-    licenseDocUrl: form.licenseDocUrl || "",
-    aadharDocUrl: form.aadharDocUrl || "",
+    licenseDocUrl: "",
+    aadharDocUrl: "",
   };
 
   const res = await fetch(`${API_BASE}/drivers`, {
@@ -21,13 +21,7 @@ export async function createDriverApi(form) {
   });
 
   let data = {};
-  try {
-    data = await res.json();
-  } catch (e) {}
-
-  if (!res.ok) {
-    throw new Error(data.error || `Failed to submit driver (${res.status})`);
-  }
-
+  try { data = await res.json(); } catch (e) {}
+  if (!res.ok) throw new Error(data.error || `Failed to submit driver (${res.status})`);
   return data;
 }

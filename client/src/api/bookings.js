@@ -1,10 +1,10 @@
 // src/api/bookings.js
-const API_BASE = "http://localhost:4000";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
 
 export async function createBookingApi(form) {
   const payload = {
-    name: form.customerName,        // ✅ backend expects "name"
-    phone: form.customerPhone,      // ✅ backend expects "phone"
+    name: form.customerName,
+    phone: form.customerPhone.replace(/\D/g, "").slice(-10),
     pickup: form.pickupAddress,
     drop: form.dropAddress,
     time: `${form.date} ${form.time}`,
@@ -19,13 +19,7 @@ export async function createBookingApi(form) {
   });
 
   let data = {};
-  try {
-    data = await res.json();
-  } catch (e) {}
-
-  if (!res.ok) {
-    throw new Error(data.error || `Failed to create booking (${res.status})`);
-  }
-
+  try { data = await res.json(); } catch (e) {}
+  if (!res.ok) throw new Error(data.error || `Failed to create booking (${res.status})`);
   return data;
 }
