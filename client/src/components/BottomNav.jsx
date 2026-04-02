@@ -10,14 +10,14 @@ const BottomNav = ({ onBookClick, onScrollTo }) => {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-800/50 bg-slate-950/98 backdrop-blur-xl">
-      <div className="flex items-center justify-around h-16 px-1 max-w-lg mx-auto">
+      <div className="flex items-center justify-around h-14 px-1 max-w-lg mx-auto">
         {items.map((item) => (
           <button
             key={item.label}
             onClick={item.action}
-            className={`flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all active:scale-95 ${
+            className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all active:scale-95 ${
               item.highlight
-                ? "bg-yellow-400/15 border border-yellow-400/25 shadow-[0_0_12px_rgba(250,204,21,0.15)]"
+                ? "bg-yellow-400/15 border border-yellow-400/20"
                 : "hover:bg-slate-800/60"
             }`}
           >
