@@ -39,7 +39,7 @@ app.use(
   cors({
     origin: [
       "http://localhost:5173",
-      "https://shif-t.vercel.app",
+      "https://shifty-app-8mvg.vercel.app",
       /\.vercel\.app$/,
     ],
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
