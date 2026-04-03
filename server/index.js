@@ -39,7 +39,7 @@ app.use(
   cors({
     origin: [
       "http://localhost:5173",
-      "https://shifty-app-8mvg.vercel.app",
+      "https://shifty-app-jet.vercel.app",
       /\.vercel\.app$/,
     ],
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
@@ -127,8 +127,7 @@ async function smsNotifyMatchingDrivers(booking) {
       `Vehicle: ${booking.vehicleType}\n` +
       `Time: ${booking.time}\n` +
       `Customer: ${booking.name}\n` +
-      `Login to accept: https://shif-t.vercel.app/driver`;
-
+      `Login to accept: https://shifty-app-jet.vercel.app/driver`;
     await Promise.all(matching.map((d) => sendSMS(d.phone, message)));
   } catch (err) {
     console.error("❌ smsNotifyMatchingDrivers error:", err);
@@ -159,7 +158,7 @@ async function smsDriverAssigned(driver, booking) {
     `Customer: ${booking.name}\n` +
     `Customer Phone: +91${booking.phone}\n` +
     `Time: ${booking.time}\n` +
-    `Login: https://shif-t.vercel.app/driver`
+    `Login: https://shifty-app-jet.vercel.app/driver`
   );
 }
 
