@@ -1,4 +1,4 @@
-# ShifT - Logistics & Transport Management Platform
+# Shifty - Logistics & Transport Management Platform
 
 A modern, full-stack logistics platform that connects customers, drivers, and admins for seamless freight and transport operations.
 
