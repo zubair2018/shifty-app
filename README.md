@@ -1,11 +1,22 @@
+<<<<<<< HEAD
 # Shifty 🚛
 **Trusted trucks on tap** — A logistics booking platform for Jammu & Kashmir.
+=======
+# Shifty - Logistics & Transport Management Platform
+>>>>>>> 1a671a7fe554ede03e959820dd508a12befe1129
 
 > Book a truck in seconds. No broker drama. No hidden fees.
 
+<<<<<<< HEAD
 Live at **[shifty.in](https://shifty.in)**
 
 ---
+=======
+## 📋 Table of Contents
+
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+>>>>>>> 1a671a7fe554ede03e959820dd508a12befe1129
 
 ## What is Shifty?
 
@@ -120,6 +131,7 @@ shifty-app/
 | `/driver/login` | Driver OTP login page |
 | `/admin` | Admin dashboard (password protected) |
 
+<<<<<<< HEAD
 ### Backend API
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -276,3 +288,9 @@ npm run build
 
 ## Built by
 Shifty Team — Kashmir, India 🇮🇳
+=======
+### Backend
+- **Node.js** - Runtime environment
+- **Express.js** - Server framework
+- **Firebase Admin SDK** - Database & authentication
+>>>>>>> 1a671a7fe554ede03e959820dd508a12befe1129
