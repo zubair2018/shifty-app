@@ -1,5 +1,5 @@
 // src/components/BookingModal.jsx
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { createBookingApi } from "../api/bookings";
 
 const TRUCK_TYPES = [
@@ -8,12 +8,85 @@ const TRUCK_TYPES = [
   { value: "factory-truck", label: "Factory Truck" },
 ];
 
+// Load Google Maps script once
+function loadGoogleMaps(apiKey) {
+  return new Promise((resolve) => {
+    if (window.google && window.google.maps) {
+      resolve();
+      return;
+    }
+    const existing = document.getElementById("google-maps-script");
+    if (existing) {
+      existing.addEventListener("load", resolve);
+      return;
+    }
+    const script = document.createElement("script");
+    script.id = "google-maps-script";
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+    script.async = true;
+    script.onload = resolve;
+    document.head.appendChild(script);
+  });
+}
+
+// Autocomplete input component
+function PlacesInput({ placeholder, value, onChange, onSelect, inputClass }) {
+  const inputRef = useRef(null);
+  const autocompleteRef = useRef(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function init() {
+      await loadGoogleMaps(import.meta.env.VITE_GOOGLE_MAPS_KEY);
+      if (!mounted || !inputRef.current) return;
+
+      autocompleteRef.current = new window.google.maps.places.Autocomplete(
+        inputRef.current,
+        {
+          componentRestrictions: { country: "in" }, // India only
+          fields: ["geometry", "formatted_address", "name"],
+        }
+      );
+
+      autocompleteRef.current.addListener("place_changed", () => {
+        const place = autocompleteRef.current.getPlace();
+        if (!place.geometry) return;
+
+        const lat = place.geometry.location.lat();
+        const lng = place.geometry.location.lng();
+        const address = place.formatted_address || place.name;
+
+        onSelect({ address, lat, lng });
+      });
+    }
+
+    init();
+    return () => { mounted = false; };
+  }, []);
+
+  return (
+    <input
+      ref={inputRef}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className={inputClass}
+      autoComplete="off"
+    />
+  );
+}
+
 const BookingModal = ({ onClose }) => {
   const [form, setForm] = useState({
     customerName: "",
     customerPhone: "",
     pickupAddress: "",
+    pickupLat: null,
+    pickupLng: null,
     dropAddress: "",
+    dropLat: null,
+    dropLng: null,
     date: "",
     time: "",
     truckType: "",
@@ -21,6 +94,9 @@ const BookingModal = ({ onClose }) => {
   });
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
+
+  const inputClass =
+    "w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-slate-100 text-[12px] placeholder:text-slate-500 focus:outline-none focus:border-blue-500";
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -30,6 +106,24 @@ const BookingModal = ({ onClose }) => {
       return;
     }
     setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handlePickupSelect = ({ address, lat, lng }) => {
+    setForm((prev) => ({
+      ...prev,
+      pickupAddress: address,
+      pickupLat: lat,
+      pickupLng: lng,
+    }));
+  };
+
+  const handleDropSelect = ({ address, lat, lng }) => {
+    setForm((prev) => ({
+      ...prev,
+      dropAddress: address,
+      dropLat: lat,
+      dropLng: lng,
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -52,12 +146,26 @@ const BookingModal = ({ onClose }) => {
 
     try {
       setStatus("loading");
-      await createBookingApi(form);
+      await createBookingApi({
+        customerName: form.customerName,
+        customerPhone: form.customerPhone,
+        pickupAddress: form.pickupAddress,
+        dropAddress: form.dropAddress,
+        date: form.date,
+        time: form.time,
+        truckType: form.truckType,
+        loadDetails: form.loadDetails,
+        // Send coordinates to backend for accurate zone matching
+        pickupLat: form.pickupLat,
+        pickupLng: form.pickupLng,
+        dropLat: form.dropLat,
+        dropLng: form.dropLng,
+      });
       setStatus("success");
       setTimeout(() => {
         setStatus("idle");
         onClose && onClose();
-      }, 2000);
+      }, 2500);
     } catch (err) {
       console.error("Booking submit failed:", err);
       setStatus("error");
@@ -83,12 +191,13 @@ const BookingModal = ({ onClose }) => {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-2.5 text-[12px]">
+
             <input
               name="customerName"
               value={form.customerName}
               onChange={handleChange}
               placeholder="Your name *"
-              className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-slate-100 text-[12px] placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
+              className={inputClass}
             />
 
             <div className="flex">
@@ -108,21 +217,33 @@ const BookingModal = ({ onClose }) => {
               <p className="text-red-400 text-[11px]">Enter complete 10-digit number</p>
             )}
 
-            <input
-              name="pickupAddress"
-              value={form.pickupAddress}
-              onChange={handleChange}
-              placeholder="Pickup location *"
-              className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-slate-100 text-[12px] placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
-            />
+            {/* Pickup — Google Places autocomplete */}
+            <div className="relative">
+              <PlacesInput
+                placeholder="Pickup location *"
+                value={form.pickupAddress}
+                onChange={(val) => setForm((prev) => ({ ...prev, pickupAddress: val, pickupLat: null, pickupLng: null }))}
+                onSelect={handlePickupSelect}
+                inputClass={inputClass}
+              />
+              {form.pickupLat && (
+                <span className="absolute right-2 top-2 text-emerald-400 text-[10px]">✓ located</span>
+              )}
+            </div>
 
-            <input
-              name="dropAddress"
-              value={form.dropAddress}
-              onChange={handleChange}
-              placeholder="Drop location *"
-              className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-slate-100 text-[12px] placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
-            />
+            {/* Drop — Google Places autocomplete */}
+            <div className="relative">
+              <PlacesInput
+                placeholder="Drop location *"
+                value={form.dropAddress}
+                onChange={(val) => setForm((prev) => ({ ...prev, dropAddress: val, dropLat: null, dropLng: null }))}
+                onSelect={handleDropSelect}
+                inputClass={inputClass}
+              />
+              {form.dropLat && (
+                <span className="absolute right-2 top-2 text-emerald-400 text-[10px]">✓ located</span>
+              )}
+            </div>
 
             <div className="flex gap-2">
               <input

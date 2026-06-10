@@ -1,25 +1,31 @@
 // src/api/bookings.js
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
+
+const API_URL = import.meta.env.VITE_API_URL || "https://shifty-backend-tvhs.onrender.com";
 
 export async function createBookingApi(form) {
-  const payload = {
-    name: form.customerName,
-    phone: form.customerPhone.replace(/\D/g, "").slice(-10),
-    pickup: form.pickupAddress,
-    drop: form.dropAddress,
-    time: `${form.date} ${form.time}`,
-    vehicleType: form.truckType,
-    loadDetails: form.loadDetails,
-  };
-
-  const res = await fetch(`${API_BASE}/bookings`, {
+  const res = await fetch(`${API_URL}/bookings`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      name: form.customerName,
+      phone: form.customerPhone,
+      pickup: form.pickupAddress,
+      drop: form.dropAddress,
+      time: `${form.date} ${form.time}`,
+      vehicleType: form.truckType,
+      loadDetails: form.loadDetails || "",
+      // Coordinates for accurate zone matching
+      pickupLat: form.pickupLat || null,
+      pickupLng: form.pickupLng || null,
+      dropLat: form.dropLat || null,
+      dropLng: form.dropLng || null,
+    }),
   });
 
-  let data = {};
-  try { data = await res.json(); } catch (e) {}
-  if (!res.ok) throw new Error(data.error || `Failed to create booking (${res.status})`);
-  return data;
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Booking failed");
+  }
+
+  return res.json();
 }

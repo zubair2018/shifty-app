@@ -13,7 +13,6 @@ export default function DriverLoginPage() {
   const confirmationRef = useRef(null);
   const navigate = useNavigate();
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (window.recaptchaVerifier) {
@@ -24,21 +23,17 @@ export default function DriverLoginPage() {
   }, []);
 
   const initRecaptcha = async () => {
-    // Always clear existing
     if (window.recaptchaVerifier) {
       try { window.recaptchaVerifier.clear(); } catch (e) {}
       window.recaptchaVerifier = null;
     }
 
-    // Use VISIBLE recaptcha — more reliable than invisible
     window.recaptchaVerifier = new RecaptchaVerifier(
       auth,
       "recaptcha-box",
       {
         size: "normal",
-        callback: () => {
-          // reCAPTCHA solved
-        },
+        callback: () => {},
         "expired-callback": () => {
           window.recaptchaVerifier = null;
           setError("reCAPTCHA expired. Please try again.");
@@ -92,7 +87,41 @@ export default function DriverLoginPage() {
     }
     try {
       setLoading(true);
-      await confirmationRef.current.confirm(otp);
+      const result = await confirmationRef.current.confirm(otp);
+      const uid = result.user.uid;
+      const phoneDigits = phone.replace(/\D/g, "").slice(-10);
+
+      // Check if this phone is a registered active driver
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/drivers/by-phone/${phoneDigits}`
+      );
+
+      if (!res.ok) {
+        await auth.signOut();
+        setError("This number is not registered as a driver. Contact admin.");
+        return;
+      }
+
+      const matched = await res.json();
+
+      if (matched.status !== "active") {
+        await auth.signOut();
+        setError("Your account is not active yet. Contact admin.");
+        return;
+      }
+
+      // Link authUid to driver record if not already linked
+      if (!matched.authUid) {
+        await fetch(
+          `${import.meta.env.VITE_API_URL}/drivers/${matched.id}/link-auth`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ authUid: uid }),
+          }
+        );
+      }
+
       navigate("/driver");
     } catch (err) {
       console.error("OTP verify error:", err);
@@ -105,10 +134,10 @@ export default function DriverLoginPage() {
   return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
       <div className="bg-gray-900 rounded-2xl p-8 w-full max-w-sm shadow-xl border border-gray-800">
-        
+
         {/* Logo */}
         <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-white">ShifT</h1>
+          <h1 className="text-3xl font-bold text-white">Shifty</h1>
           <p className="text-gray-400 mt-1 text-sm">Driver Login</p>
         </div>
 
@@ -146,7 +175,6 @@ export default function DriverLoginPage() {
               </p>
             </div>
 
-            {/* reCAPTCHA box — visible */}
             <div className="flex justify-center">
               <div id="recaptcha-box"></div>
             </div>

@@ -85,8 +85,8 @@ const Footer = () => {
             © {new Date().getFullYear()} Shifty Technologies. All rights reserved.
           </span>
           <span className="text-[11px] text-slate-700 max-w-md text-right leading-relaxed">
-            Shifty connects customers and independent truck owners and does not
-            operate vehicles itself. Confirm load details directly with the
+            Shifty connects customers and truck owners and does not
+            operate vehicles itself. Confirm load details with the
             driver before trip start.
           </span>
         </div>

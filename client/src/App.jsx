@@ -20,6 +20,7 @@ import AdminPage from "./AdminPage";
 import DriverPage from "./DriverPage";
 import DriverLoginPage from "./DriverLoginPage";
 import DriverAuthGuard from "./DriverAuthGuard";
+import AdminAuthGuard from "./AdminAuthGuard";
 
 // Main landing page layout (your existing homepage)
 function MainLanding() {
@@ -79,7 +80,11 @@ function App() {
       <Route path="/" element={<MainLanding />} />
 
       {/* Admin page */}
-      <Route path="/admin" element={<AdminPage />} />
+      <Route path="/admin" element={
+  <AdminAuthGuard>
+    <AdminPage />
+  </AdminAuthGuard>
+} />
 
       {/* Driver login page */}
       <Route path="/driver/login" element={<DriverLoginPage />} />
