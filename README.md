@@ -1,22 +1,15 @@
-<<<<<<< HEAD
 # Shifty 🚛
 **Trusted trucks on tap** — A logistics booking platform for Jammu & Kashmir.
-=======
+
 # Shifty - Logistics & Transport Management Platform
->>>>>>> 1a671a7fe554ede03e959820dd508a12befe1129
 
-> Book a truck in seconds. No broker drama. No hidden fees.
-
-<<<<<<< HEAD
 Live at **[shifty.in](https://shifty.in)**
 
----
-=======
+
 ## 📋 Table of Contents
 
 - [Features](#features)
 - [Tech Stack](#tech-stack)
->>>>>>> 1a671a7fe554ede03e959820dd508a12befe1129
 
 ## What is Shifty?
 
@@ -26,7 +19,7 @@ Shifty connects customers who need to move goods with verified truck drivers in 
 
 ## How it Works
 
-```
+
 Customer books a truck
         ↓
 Customer gets SMS confirmation
@@ -42,7 +35,6 @@ Customer gets SMS with driver name + phone number
 They contact each other directly
         ↓
 Trip completes → Customer gets delivery confirmation SMS
-```
 
 ---
 
@@ -131,7 +123,7 @@ shifty-app/
 | `/driver/login` | Driver OTP login page |
 | `/admin` | Admin dashboard (password protected) |
 
-<<<<<<< HEAD
+
 ### Backend API
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -189,14 +181,13 @@ Zone detection priority:
 ## Environment Variables
 
 ### client/.env.development and .env.production
-```
 VITE_API_URL=http://localhost:4000              # or your Render URL in production
 VITE_GOOGLE_MAPS_KEY=your_google_maps_key
 VITE_ADMIN_PASSWORD=your_admin_password
-```
+
 
 ### server/.env
-```
+
 PORT=4000
 TWILIO_ACCOUNT_SID=your_twilio_sid
 TWILIO_AUTH_TOKEN=your_twilio_token
@@ -204,7 +195,7 @@ TWILIO_SMS_FROM=your_twilio_number
 GOOGLE_MAPS_KEY=your_google_maps_key
 SERVICE_ACCOUNT_KEY=your_firebase_json     # in production
 API_URL=https://your-render-url.onrender.com
-```
+
 
 ---
 
@@ -212,7 +203,6 @@ API_URL=https://your-render-url.onrender.com
 
 **Prerequisites:** Node.js 18+, npm
 
-```bash
 # Clone the repo
 git clone https://github.com/zubair2018/shifty-app.git
 cd shifty-app
@@ -230,18 +220,17 @@ npm install
 # Add your .env.development file
 npm run dev
 # App runs on http://localhost:5173
-```
+
 
 ---
 
 ## Deployment
 
 **Frontend → Vercel**
-```bash
+
 cd client
 npm run build
 # Push to GitHub, Vercel auto-deploys
-```
 
 **Backend → Render**
 - Connect GitHub repo to Render
@@ -288,9 +277,8 @@ npm run build
 
 ## Built by
 Shifty Team — Kashmir, India 🇮🇳
-=======
+
 ### Backend
 - **Node.js** - Runtime environment
 - **Express.js** - Server framework
 - **Firebase Admin SDK** - Database & authentication
->>>>>>> 1a671a7fe554ede03e959820dd508a12befe1129
