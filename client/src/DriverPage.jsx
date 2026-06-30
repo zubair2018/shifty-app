@@ -1,10 +1,9 @@
 // src/DriverPage.jsx
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "./supabase";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
-
-// ⚠️ TEMPORARY: Replace with real Firestore driver doc ID
-const DRIVER_ID = "U7oUSgVxRLRJuP7lc0gJ";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
 async function fetchJson(url, options) {
   const res = await fetch(url, options);
@@ -38,11 +37,11 @@ function StatusBadge({ status }) {
   );
 }
 
-function BookingDetailModal({ booking, onClose, onAccept, onRelease, onStartTrip, onCompleteTrip }) {
+function BookingDetailModal({ booking, driverId, onClose, onAccept, onRelease, onStartTrip, onCompleteTrip }) {
   const isPending = booking.status === "pending";
-  const isAssigned = booking.status === "assigned" && booking.driverId === DRIVER_ID;
-  const isAccepted = booking.status === "accepted" && booking.driverId === DRIVER_ID;
-  const isOnTrip = booking.status === "on_trip" && booking.driverId === DRIVER_ID;
+  const isAssigned = booking.status === "assigned" && booking.driver_id === driverId;
+  const isAccepted = booking.status === "accepted" && booking.driver_id === driverId;
+  const isOnTrip = booking.status === "on_trip" && booking.driver_id === driverId;
   const isCompleted = booking.status === "completed";
   const isCancelled = booking.status === "cancelled";
 
@@ -61,12 +60,12 @@ function BookingDetailModal({ booking, onClose, onAccept, onRelease, onStartTrip
           </div>
           <div className="bg-slate-800 rounded-lg p-3 space-y-2">
             <Row label="Pickup" value={booking.pickup} bold />
-            <Row label="Drop" value={booking.drop} bold />
-            <Row label="Time" value={booking.time} />
+            <Row label="Drop" value={booking.drop_location} bold />
+            <Row label="Time" value={booking.booking_time} />
           </div>
           <div className="bg-slate-800 rounded-lg p-3 space-y-2">
-            <Row label="Vehicle" value={booking.vehicleType} />
-            <Row label="Load" value={booking.loadDetails || "N/A"} />
+            <Row label="Vehicle" value={booking.vehicle_type} />
+            <Row label="Load" value={booking.load_details || "N/A"} />
             <div className="flex justify-between items-center">
               <span className="text-slate-400">Status</span>
               <StatusBadge status={booking.status} />
@@ -74,9 +73,7 @@ function BookingDetailModal({ booking, onClose, onAccept, onRelease, onStartTrip
           </div>
         </div>
 
-        {/* Action buttons based on status */}
         <div className="flex flex-col gap-2 pt-1">
-          {/* Accept load */}
           {(isPending || isAssigned) && (
             <button
               onClick={() => onAccept(booking.id)}
@@ -86,7 +83,6 @@ function BookingDetailModal({ booking, onClose, onAccept, onRelease, onStartTrip
             </button>
           )}
 
-          {/* Start trip */}
           {isAccepted && (
             <button
               onClick={() => onStartTrip(booking.id)}
@@ -96,7 +92,6 @@ function BookingDetailModal({ booking, onClose, onAccept, onRelease, onStartTrip
             </button>
           )}
 
-          {/* Complete trip */}
           {isOnTrip && (
             <button
               onClick={() => onCompleteTrip(booking.id)}
@@ -106,7 +101,6 @@ function BookingDetailModal({ booking, onClose, onAccept, onRelease, onStartTrip
             </button>
           )}
 
-          {/* Release load — only if accepted, not yet on trip */}
           {isAccepted && (
             <button
               onClick={() => onRelease(booking.id)}
@@ -116,7 +110,6 @@ function BookingDetailModal({ booking, onClose, onAccept, onRelease, onStartTrip
             </button>
           )}
 
-          {/* Completed/cancelled — just show status */}
           {(isCompleted || isCancelled) && (
             <div className="text-center text-slate-400 text-xs py-2">
               This trip is {booking.status}. No further actions needed.
@@ -145,6 +138,8 @@ function Row({ label, value, bold }) {
 }
 
 export default function DriverPage() {
+  const navigate = useNavigate();
+  const [driverId, setDriverId] = useState(null);
   const [allBookings, setAllBookings] = useState([]);
   const [cityBookings, setCityBookings] = useState([]);
   const [driverInfo, setDriverInfo] = useState(null);
@@ -154,28 +149,50 @@ export default function DriverPage() {
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [actionLoading, setActionLoading] = useState("");
 
+  // Get the real logged-in driver's record using their Supabase auth session
   useEffect(() => {
+    const init = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        navigate("/driver/login");
+        return;
+      }
+
+      const phone = session.user.phone; // e.g. "919596071713"
+      const digits = phone.replace(/\D/g, "").slice(-10);
+
+      try {
+        const driver = await fetchJson(`${API_BASE}/drivers/by-phone/${digits}`);
+        setDriverId(driver.id);
+        setDriverInfo(driver);
+      } catch (err) {
+        setError("Could not find your driver record. Contact admin.");
+        setLoading(false);
+      }
+    };
+    init();
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!driverId) return;
     loadAll();
     const interval = setInterval(loadAll, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [driverId]);
 
   const loadAll = async () => {
     try {
       setLoading(true);
       setError("");
 
-      const driversRes = await fetch(`${API_BASE}/drivers`);
-      const drivers = await driversRes.json();
-      const me = drivers.find((d) => d.id === DRIVER_ID);
-      if (me) setDriverInfo(me);
-
-      const myData = await fetchJson(`${API_BASE}/drivers/${DRIVER_ID}/bookings`);
+      const myData = await fetchJson(`${API_BASE}/drivers/${driverId}/bookings`);
       setAllBookings(myData || []);
 
-      if (me?.city) {
+      if (driverInfo?.city) {
         const cityData = await fetchJson(
-          `${API_BASE}/bookings/city/${encodeURIComponent(me.city)}?driverId=${DRIVER_ID}&truckType=${encodeURIComponent(me.truckTypes || "")}`
+          `${API_BASE}/bookings/city/${encodeURIComponent(driverInfo.city)}?driverId=${driverId}&truckType=${encodeURIComponent(driverInfo.truck_types || "")}${
+            driverInfo.city_lat ? `&lat=${driverInfo.city_lat}&lng=${driverInfo.city_lng}` : ""
+          }`
         );
         setCityBookings(cityData || []);
       }
@@ -184,6 +201,11 @@ export default function DriverPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/driver/login");
   };
 
   const handleAccept = async (bookingId) => {
@@ -195,13 +217,13 @@ export default function DriverPage() {
         await fetchJson(`${API_BASE}/bookings/${bookingId}/self-assign`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ driverId: DRIVER_ID }),
+          body: JSON.stringify({ driverId }),
         });
       } else {
         await fetchJson(`${API_BASE}/bookings/${bookingId}/driver-response`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "accept" }),
+          body: JSON.stringify({ action: "accept", driverId }),
         });
       }
       setSelectedBooking(null);
@@ -221,7 +243,7 @@ export default function DriverPage() {
       await fetchJson(`${API_BASE}/bookings/${bookingId}/release`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ driverId: DRIVER_ID }),
+        body: JSON.stringify({ driverId }),
       });
       setSelectedBooking(null);
       await loadAll();
@@ -290,25 +312,31 @@ export default function DriverPage() {
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
 
-        {/* Header */}
         <header className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold">Driver Dashboard</h1>
             <p className="text-xs text-slate-400">
               {driverInfo
-                ? `${driverInfo.name} · ${driverInfo.city} · ${driverInfo.truckTypes || "N/A"}`
+                ? `${driverInfo.name} · ${driverInfo.city} · ${driverInfo.truck_types || "N/A"}`
                 : "Loading..."}
             </p>
           </div>
-          <button
-            onClick={loadAll}
-            className="px-3 py-1.5 text-xs rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800"
-          >
-            Refresh
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={loadAll}
+              className="px-3 py-1.5 text-xs rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800"
+            >
+              Refresh
+            </button>
+            <button
+              onClick={handleLogout}
+              className="px-3 py-1.5 text-xs rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 text-rose-300"
+            >
+              Logout
+            </button>
+          </div>
         </header>
 
-        {/* Trip status legend */}
         <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-3">
           <p className="text-[11px] text-slate-400 mb-2 font-medium">Trip Progress</p>
           <div className="flex items-center gap-1 text-[10px] text-slate-400 flex-wrap">
@@ -320,7 +348,6 @@ export default function DriverPage() {
           </div>
         </div>
 
-        {/* Tabs */}
         <div className="flex gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
           {tabs.map((tab) => (
             <button
@@ -337,14 +364,12 @@ export default function DriverPage() {
           ))}
         </div>
 
-        {/* Error */}
         {error && (
           <div className="px-3 py-2 rounded-lg bg-rose-500/10 border border-rose-500/40 text-xs text-rose-100">
             {error}
           </div>
         )}
 
-        {/* List */}
         {loading ? (
           <p className="text-sm text-slate-400">Loading...</p>
         ) : displayBookings.length === 0 ? (
@@ -368,26 +393,25 @@ export default function DriverPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="space-y-1 flex-1">
                     <div className="text-sm font-semibold text-white">
-                      {b.pickup} → {b.drop}
+                      {b.pickup} → {b.drop_location}
                     </div>
                     <div className="text-[11px] text-slate-400">
-                      👤 {b.name} · 🚛 {b.vehicleType}
+                      👤 {b.name} · 🚛 {b.vehicle_type}
                     </div>
-                    <div className="text-[11px] text-slate-500">🕐 {b.time}</div>
-                    {b.loadDetails && (
-                      <div className="text-[11px] text-slate-500">📦 {b.loadDetails}</div>
+                    <div className="text-[11px] text-slate-500">🕐 {b.booking_time}</div>
+                    {b.load_details && (
+                      <div className="text-[11px] text-slate-500">📦 {b.load_details}</div>
                     )}
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <StatusBadge status={b.status} />
-                    {b.driverId === DRIVER_ID && (
+                    {b.driver_id === driverId && (
                       <span className="text-[10px] text-blue-400 font-medium">Yours</span>
                     )}
                   </div>
                 </div>
 
-                {/* Quick action buttons on card */}
-                {b.driverId === DRIVER_ID && (
+                {b.driver_id === driverId && (
                   <div className="mt-3 flex gap-2" onClick={(e) => e.stopPropagation()}>
                     {b.status === "accepted" && (
                       <button
@@ -417,10 +441,10 @@ export default function DriverPage() {
         )}
       </div>
 
-      {/* Detail modal */}
       {selectedBooking && (
         <BookingDetailModal
           booking={selectedBooking}
+          driverId={driverId}
           onClose={() => setSelectedBooking(null)}
           onAccept={handleAccept}
           onRelease={handleRelease}

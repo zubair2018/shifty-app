@@ -1,12 +1,9 @@
 // server/index.js
 import express from "express";
 import cors from "cors";
-import admin from "firebase-admin";
 import twilio from "twilio";
 import * as dotenv from "dotenv";
-import { readFileSync } from "fs";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
+import { supabase } from "./supabase.js";
 import {
   areasInSameZone,
   getZoneName,
@@ -18,24 +15,6 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 4000;
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-// Firebase init
-if (!admin.apps.length) {
-  let serviceAccount;
-  if (process.env.SERVICE_ACCOUNT_KEY) {
-    serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY);
-    console.log("✅ Using SERVICE_ACCOUNT_KEY from environment");
-  } else {
-    const filePath = join(__dirname, "serviceAccountKey.json");
-    serviceAccount = JSON.parse(readFileSync(filePath, "utf8"));
-    console.log("✅ Using serviceAccountKey.json from file");
-  }
-  admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-}
-const db = admin.firestore();
 
 const twilioClient = twilio(
   process.env.TWILIO_ACCOUNT_SID,
@@ -74,7 +53,7 @@ function truckTypeMatches(driverTrucks, bookingTruck) {
   return list.includes(booking);
 }
 
-// ---- Google Geocoding — get coordinates for a place name ----
+// ---- Google Geocoding ----
 async function geocodePlace(placeName) {
   try {
     const encoded = encodeURIComponent(placeName + ", Kashmir, India");
@@ -85,43 +64,27 @@ async function geocodePlace(placeName) {
       const { lat, lng } = data.results[0].geometry.location;
       console.log(`📍 Geocoded "${placeName}" → lat:${lat}, lng:${lng}`);
       return { lat, lng };
-    } else {
-      console.log(`⚠️ Geocoding failed for "${placeName}": ${data.status}`);
-      return null;
     }
+    console.log(`⚠️ Geocoding failed for "${placeName}": ${data.status}`);
+    return null;
   } catch (err) {
     console.error(`❌ Geocoding error for "${placeName}":`, err.message);
     return null;
   }
 }
 
-// ---- Smart zone detection — coordinates first, text fallback, geocode last ----
 async function detectZone(placeName, coords) {
-  // 1. Use coordinates from frontend if available
   if (coords && coords.lat && coords.lng) {
     const zone = getZoneForCoordinates(coords.lat, coords.lng);
-    if (zone) {
-      console.log(`✅ Zone from coordinates: "${placeName}" → ${zone.name}`);
-      return { zone, coords };
-    }
+    if (zone) return { zone, coords };
   }
-  // 2. Try text matching (fast, no API call)
   const zoneByText = getZoneForArea(placeName);
-  if (zoneByText) {
-    console.log(`✅ Zone from text: "${placeName}" → ${zoneByText.name}`);
-    return { zone: zoneByText, coords: null };
-  }
-  // 3. Fall back to Google Geocoding API
-  console.log(`🔍 Geocoding "${placeName}"...`);
+  if (zoneByText) return { zone: zoneByText, coords: null };
   const geocoded = await geocodePlace(placeName);
   if (geocoded) {
     const zone = getZoneForCoordinates(geocoded.lat, geocoded.lng);
-    if (zone) {
-      console.log(`✅ Zone from geocoding: "${placeName}" → ${zone.name}`);
-      return { zone, coords: geocoded };
-    }
+    if (zone) return { zone, coords: geocoded };
   }
-  console.log(`⚠️ Could not detect zone for "${placeName}"`);
   return { zone: null, coords: null };
 }
 
@@ -145,28 +108,26 @@ async function sendSMS(phone, message) {
   }
 }
 
-// ---- SMS: Booking confirmation to customer ----
 async function smsBookingConfirmation(booking) {
   await sendSMS(
     booking.phone,
     `Shifty: Booking Confirmed! ✅\n` +
     `Hi ${booking.name}, your booking has been received.\n` +
     `Pickup: ${booking.pickup}\n` +
-    `Drop: ${booking.drop}\n` +
-    `Vehicle: ${booking.vehicleType}\n` +
-    `Time: ${booking.time}\n` +
+    `Drop: ${booking.drop_location}\n` +
+    `Vehicle: ${booking.vehicle_type}\n` +
+    `Time: ${booking.booking_time}\n` +
     `Please wait while we find a matching driver for you. We will notify you shortly!`
   );
 }
 
-// ---- SMS: Notify matching drivers ----
 async function smsNotifyMatchingDrivers(booking) {
   try {
-    const bookingTruck = (booking.vehicleType || "").trim().toLowerCase();
+    const bookingTruck = (booking.vehicle_type || "").trim().toLowerCase();
 
     let bookingZone;
-    if (booking.pickupLat && booking.pickupLng) {
-      bookingZone = getZoneForCoordinates(booking.pickupLat, booking.pickupLng);
+    if (booking.pickup_lat && booking.pickup_lng) {
+      bookingZone = getZoneForCoordinates(booking.pickup_lat, booking.pickup_lng);
     } else {
       bookingZone = getZoneForArea(booking.pickup);
     }
@@ -177,24 +138,26 @@ async function smsNotifyMatchingDrivers(booking) {
     }
 
     console.log(`🔍 Notifying drivers in zone: ${bookingZone.name}`);
-    const snap = await db.collection("drivers").get();
-    console.log(`📋 Total drivers in DB: ${snap.docs.length}`);
 
-    const matching = snap.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .filter((d) => {
-        const isActive = (d.status || "").trim() === "active";
-        let zoneMatch;
-        if (d.cityLat && d.cityLng) {
-          const driverZone = getZoneForCoordinates(d.cityLat, d.cityLng);
-          zoneMatch = driverZone && driverZone.id === bookingZone.id;
-        } else {
-          zoneMatch = areasInSameZone(d.city, booking.pickup);
-        }
-        const truckOk = truckTypeMatches(d.truckTypes, bookingTruck);
-        console.log(`  → ${d.name} | active:${isActive} | zoneMatch:${zoneMatch} | truck:${truckOk}`);
-        return isActive && zoneMatch && truckOk && d.phone;
-      });
+    const { data: drivers, error } = await supabase
+      .from("drivers")
+      .select("*")
+      .eq("status", "active");
+
+    if (error) throw error;
+    console.log(`📋 Active drivers in DB: ${drivers.length}`);
+
+    const matching = drivers.filter((d) => {
+      let zoneMatch;
+      if (d.city_lat && d.city_lng) {
+        const driverZone = getZoneForCoordinates(d.city_lat, d.city_lng);
+        zoneMatch = driverZone && driverZone.id === bookingZone.id;
+      } else {
+        zoneMatch = areasInSameZone(d.city, booking.pickup);
+      }
+      const truckOk = truckTypeMatches(d.truck_types, bookingTruck);
+      return zoneMatch && truckOk && d.phone;
+    });
 
     console.log(`✅ Matching drivers: ${matching.length}`);
     if (matching.length === 0) return;
@@ -203,9 +166,9 @@ async function smsNotifyMatchingDrivers(booking) {
       `Shifty: New Load Available in ${bookingZone.name}! 🚛\n` +
       `A load has been matched in your area.\n` +
       `Pickup: ${booking.pickup}\n` +
-      `Drop: ${booking.drop}\n` +
-      `Vehicle: ${booking.vehicleType}\n` +
-      `Time: ${booking.time}\n` +
+      `Drop: ${booking.drop_location}\n` +
+      `Vehicle: ${booking.vehicle_type}\n` +
+      `Time: ${booking.booking_time}\n` +
       `Login now to accept: https://shifty.in/driver`;
 
     await Promise.all(matching.map((d) => sendSMS(d.phone, message)));
@@ -214,7 +177,6 @@ async function smsNotifyMatchingDrivers(booking) {
   }
 }
 
-// ---- SMS: Customer notified when driver assigned ----
 async function smsDriverAssignedToCustomer(booking, driver) {
   await sendSMS(
     booking.phone,
@@ -222,25 +184,24 @@ async function smsDriverAssignedToCustomer(booking, driver) {
     `Hi ${booking.name}, great news!\n` +
     `${driver.name} has been assigned as your driver.\n` +
     `Driver Phone: +91${cleanPhone(driver.phone)}\n` +
-    `Vehicle: ${driver.truckTypes || booking.vehicleType}\n` +
-    `Route: ${booking.pickup} → ${booking.drop}\n` +
-    `Time: ${booking.time}\n` +
+    `Vehicle: ${driver.truck_types || booking.vehicle_type}\n` +
+    `Route: ${booking.pickup} → ${booking.drop_location}\n` +
+    `Time: ${booking.booking_time}\n` +
     `You can contact your driver directly on the number above.`
   );
 }
 
-// ---- SMS: Driver notified when assigned ----
 async function smsDriverAssigned(driver, booking) {
   await sendSMS(
     driver.phone,
     `Shifty: Load Assigned to You! 🚛\n` +
     `Hi ${driver.name}, you have a new load.\n` +
     `Pickup: ${booking.pickup}\n` +
-    `Drop: ${booking.drop}\n` +
-    `Vehicle: ${booking.vehicleType}\n` +
+    `Drop: ${booking.drop_location}\n` +
+    `Vehicle: ${booking.vehicle_type}\n` +
     `Customer: ${booking.name}\n` +
     `Customer Phone: +91${cleanPhone(booking.phone)}\n` +
-    `Time: ${booking.time}\n` +
+    `Time: ${booking.booking_time}\n` +
     `Login to manage: https://shifty.in/driver`
   );
 }
@@ -248,14 +209,14 @@ async function smsDriverAssigned(driver, booking) {
 // ---- Routes ----
 
 app.get("/", (req, res) => {
-  res.json({ status: "ok", message: "Shifty API running" });
+  res.json({ status: "ok", message: "Shifty API running (Supabase)" });
 });
 
 app.get("/zones", (req, res) => {
   res.json(ZONES.map((z) => ({ id: z.id, name: z.name, areas: z.areas })));
 });
 
-// City bookings — MUST be before /bookings/:id
+// City bookings — for driver dashboard, zone matching
 app.get("/bookings/city/:city", async (req, res) => {
   try {
     const city = req.params.city.trim();
@@ -264,10 +225,20 @@ app.get("/bookings/city/:city", async (req, res) => {
     const driverLat = parseFloat(req.query.lat) || null;
     const driverLng = parseFloat(req.query.lng) || null;
 
-    const pendingSnap = await db.collection("bookings").where("status", "==", "pending").get();
-    let assignedSnap = { docs: [] };
+    const { data: pending, error: pendingErr } = await supabase
+      .from("bookings")
+      .select("*")
+      .eq("status", "pending");
+    if (pendingErr) throw pendingErr;
+
+    let assigned = [];
     if (driverId) {
-      assignedSnap = await db.collection("bookings").where("driverId", "==", driverId).get();
+      const { data, error } = await supabase
+        .from("bookings")
+        .select("*")
+        .eq("driver_id", driverId);
+      if (error) throw error;
+      assigned = data;
     }
 
     let driverZone;
@@ -277,25 +248,21 @@ app.get("/bookings/city/:city", async (req, res) => {
       driverZone = getZoneForArea(city);
     }
 
-    const pendingData = pendingSnap.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .filter((b) => {
-        let zoneMatch;
-        if (driverZone && b.pickupLat && b.pickupLng) {
-          const bZone = getZoneForCoordinates(b.pickupLat, b.pickupLng);
-          zoneMatch = bZone && bZone.id === driverZone.id;
-        } else {
-          zoneMatch = areasInSameZone(city, b.pickup);
-        }
-        return zoneMatch && truckTypeMatches(truckType, b.vehicleType);
-      });
+    const pendingFiltered = pending.filter((b) => {
+      let zoneMatch;
+      if (driverZone && b.pickup_lat && b.pickup_lng) {
+        const bZone = getZoneForCoordinates(b.pickup_lat, b.pickup_lng);
+        zoneMatch = bZone && bZone.id === driverZone.id;
+      } else {
+        zoneMatch = areasInSameZone(city, b.pickup);
+      }
+      return zoneMatch && truckTypeMatches(truckType, b.vehicle_type);
+    });
 
-    const assignedData = assignedSnap.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .filter((b) => b.status !== "pending");
+    const assignedFiltered = assigned.filter((b) => b.status !== "pending");
 
-    const all = [...pendingData, ...assignedData];
-    all.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const all = [...pendingFiltered, ...assignedFiltered];
+    all.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     res.json(all);
   } catch (err) {
     console.error("Get city bookings failed", err);
@@ -303,10 +270,15 @@ app.get("/bookings/city/:city", async (req, res) => {
   }
 });
 
+// List all bookings
 app.get("/bookings", async (req, res) => {
   try {
-    const snap = await db.collection("bookings").orderBy("createdAt", "desc").get();
-    res.json(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+    const { data, error } = await supabase
+      .from("bookings")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    res.json(data);
   } catch (err) {
     res.status(500).json({ error: "Failed to load bookings" });
   }
@@ -323,30 +295,34 @@ app.post("/bookings", async (req, res) => {
 
     const { zone, coords } = await detectZone(pickup, { lat: pickupLat, lng: pickupLng });
 
-    const booking = {
+    const newBooking = {
       name: String(name).trim(),
       phone: cleanPhone(phone),
       pickup: String(pickup).trim(),
-      drop: String(drop).trim(),
-      time: String(time).trim(),
-      vehicleType: String(vehicleType || "mini-truck").trim(),
-      loadDetails: String(loadDetails || "").trim(),
-      pickupLat: coords?.lat || pickupLat || null,
-      pickupLng: coords?.lng || pickupLng || null,
-      dropLat: dropLat || null,
-      dropLng: dropLng || null,
-      zone: zone ? zone.id : null,
-      zoneName: zone ? zone.name : null,
+      drop_location: String(drop).trim(),
+      booking_time: String(time).trim(),
+      vehicle_type: String(vehicleType || "mini-truck").trim(),
+      load_details: String(loadDetails || "").trim(),
+      pickup_lat: coords?.lat || pickupLat || null,
+      pickup_lng: coords?.lng || pickupLng || null,
+      drop_lat: dropLat || null,
+      drop_lng: dropLng || null,
+      zone_id: zone ? zone.id : null,
+      zone_name: zone ? zone.name : null,
       status: "pending",
-      driverId: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
     };
 
-    const docRef = await db.collection("bookings").add(booking);
-    smsBookingConfirmation(booking);
-    smsNotifyMatchingDrivers(booking);
-    return res.status(201).json({ id: docRef.id, ...booking });
+    const { data, error } = await supabase
+      .from("bookings")
+      .insert(newBooking)
+      .select()
+      .single();
+    if (error) throw error;
+
+    smsBookingConfirmation(data);
+    smsNotifyMatchingDrivers(data);
+
+    return res.status(201).json(data);
   } catch (err) {
     console.error("Create booking failed", err);
     return res.status(500).json({ error: "Failed to create booking" });
@@ -366,57 +342,64 @@ app.post("/drivers", async (req, res) => {
     if (cityLat && cityLng) zone = getZoneForCoordinates(cityLat, cityLng);
     if (!zone) zone = getZoneForArea(city);
 
-    const driver = {
+    const newDriver = {
       name: String(name).trim(),
       phone: cleanPhone(phone),
       city: String(city).trim(),
-      cityLat: cityLat || null,
-      cityLng: cityLng || null,
-      zone: zone ? zone.id : null,
-      zoneName: zone ? zone.name : null,
-      truckTypes: String(truckTypes || "").trim(),
-      fleetSize: String(fleetSize || "").trim(),
-      drivingLicenseNo: String(drivingLicenseNo || "").trim(),
-      aadharNumber: String(aadharNumber || "").trim(),
-      licenseDocUrl: "",
-      aadharDocUrl: "",
+      city_lat: cityLat || null,
+      city_lng: cityLng || null,
+      zone_id: zone ? zone.id : null,
+      zone_name: zone ? zone.name : null,
+      truck_types: String(truckTypes || "").trim(),
+      fleet_size: String(fleetSize || "").trim(),
+      driving_license_no: String(drivingLicenseNo || "").trim(),
+      aadhar_number: String(aadharNumber || "").trim(),
       status: "pending",
-      rating: 0,
-      authUid: null,
-      fcmToken: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
     };
 
-    const docRef = await db.collection("drivers").add(driver);
-    return res.status(201).json({ id: docRef.id, ...driver });
+    const { data, error } = await supabase
+      .from("drivers")
+      .insert(newDriver)
+      .select()
+      .single();
+    if (error) throw error;
+
+    return res.status(201).json(data);
   } catch (err) {
     console.error("Create driver failed", err);
     return res.status(500).json({ error: "Failed to create driver" });
   }
 });
 
-// Get driver by phone — MUST be before /drivers/:id
+// Get driver by phone — MUST be before /drivers/:id-style routes
 app.get("/drivers/by-phone/:phone", async (req, res) => {
   try {
     const phone = cleanPhone(req.params.phone);
-    const snap = await db.collection("drivers").where("phone", "==", phone).get();
-    if (snap.empty) return res.status(404).json({ error: "Driver not found" });
-    const doc = snap.docs[0];
-    return res.json({ id: doc.id, ...doc.data() });
+    const { data, error } = await supabase
+      .from("drivers")
+      .select("*")
+      .eq("phone", phone)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: "Driver not found" });
+    return res.json(data);
   } catch (err) {
     res.status(500).json({ error: "Failed to find driver" });
   }
 });
 
+// List drivers
 app.get("/drivers", async (req, res) => {
   try {
+    let query = supabase.from("drivers").select("*");
     if (req.query.authUid) {
-      const snap = await db.collection("drivers").where("authUid", "==", req.query.authUid).get();
-      return res.json(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+      query = query.eq("auth_uid", req.query.authUid);
+    } else {
+      query = query.order("created_at", { ascending: false });
     }
-    const snap = await db.collection("drivers").orderBy("createdAt", "desc").get();
-    res.json(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json(data);
   } catch (err) {
     res.status(500).json({ error: "Failed to load drivers" });
   }
@@ -424,9 +407,14 @@ app.get("/drivers", async (req, res) => {
 
 app.patch("/drivers/:id/approve", async (req, res) => {
   try {
-    const ref = db.collection("drivers").doc(req.params.id);
-    if (!(await ref.get()).exists) return res.status(404).json({ error: "Driver not found" });
-    await ref.update({ status: "active", updatedAt: new Date().toISOString() });
+    const { data, error } = await supabase
+      .from("drivers")
+      .update({ status: "active" })
+      .eq("id", req.params.id)
+      .select()
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: "Driver not found" });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: "Failed to approve driver" });
@@ -435,9 +423,14 @@ app.patch("/drivers/:id/approve", async (req, res) => {
 
 app.patch("/drivers/:id/deactivate", async (req, res) => {
   try {
-    const ref = db.collection("drivers").doc(req.params.id);
-    if (!(await ref.get()).exists) return res.status(404).json({ error: "Driver not found" });
-    await ref.update({ status: "inactive", updatedAt: new Date().toISOString() });
+    const { data, error } = await supabase
+      .from("drivers")
+      .update({ status: "inactive" })
+      .eq("id", req.params.id)
+      .select()
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: "Driver not found" });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: "Failed to deactivate driver" });
@@ -448,30 +441,46 @@ app.patch("/drivers/:id/link-auth", async (req, res) => {
   try {
     const { authUid } = req.body;
     if (!authUid) return res.status(400).json({ error: "authUid required" });
-    const ref = db.collection("drivers").doc(req.params.id);
-    if (!(await ref.get()).exists) return res.status(404).json({ error: "Driver not found" });
-    await ref.update({ authUid, updatedAt: new Date().toISOString() });
+    const { data, error } = await supabase
+      .from("drivers")
+      .update({ auth_uid: authUid })
+      .eq("id", req.params.id)
+      .select()
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: "Driver not found" });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: "Failed to link auth" });
   }
 });
 
+// Assign driver (admin)
 app.patch("/bookings/:id/assign-driver", async (req, res) => {
   try {
     const { driverId } = req.body;
     if (!driverId) return res.status(400).json({ error: "driverId required" });
-    const bookingRef = db.collection("bookings").doc(req.params.id);
-    const bookingSnap = await bookingRef.get();
-    if (!bookingSnap.exists) return res.status(404).json({ error: "Booking not found" });
-    const driverRef = db.collection("drivers").doc(driverId);
-    const driverSnap = await driverRef.get();
-    if (!driverSnap.exists) return res.status(404).json({ error: "Driver not found" });
-    await bookingRef.update({ driverId, status: "assigned", updatedAt: new Date().toISOString() });
-    const booking = { ...bookingSnap.data(), id: req.params.id };
-    const driver = { ...driverSnap.data(), id: driverId };
+
+    const { data: driver, error: driverErr } = await supabase
+      .from("drivers")
+      .select("*")
+      .eq("id", driverId)
+      .maybeSingle();
+    if (driverErr) throw driverErr;
+    if (!driver) return res.status(404).json({ error: "Driver not found" });
+
+    const { data: booking, error: bookingErr } = await supabase
+      .from("bookings")
+      .update({ driver_id: driverId, status: "assigned" })
+      .eq("id", req.params.id)
+      .select()
+      .maybeSingle();
+    if (bookingErr) throw bookingErr;
+    if (!booking) return res.status(404).json({ error: "Booking not found" });
+
     smsDriverAssigned(driver, booking);
     smsDriverAssignedToCustomer(booking, driver);
+
     res.json({ success: true });
   } catch (err) {
     console.error("Assign driver failed", err);
@@ -479,57 +488,74 @@ app.patch("/bookings/:id/assign-driver", async (req, res) => {
   }
 });
 
+// Update booking status
 app.patch("/bookings/:id/status", async (req, res) => {
   try {
     const { status } = req.body;
     const allowed = ["pending", "assigned", "accepted", "on_trip", "completed", "cancelled"];
     if (!allowed.includes(status)) return res.status(400).json({ error: "Invalid status" });
-    const ref = db.collection("bookings").doc(req.params.id);
-    const snap = await ref.get();
-    if (!snap.exists) return res.status(404).json({ error: "Booking not found" });
-    await ref.update({ status, updatedAt: new Date().toISOString() });
-    const booking = snap.data();
+
+    const { data: booking, error } = await supabase
+      .from("bookings")
+      .update({ status })
+      .eq("id", req.params.id)
+      .select()
+      .maybeSingle();
+    if (error) throw error;
+    if (!booking) return res.status(404).json({ error: "Booking not found" });
+
     if (status === "on_trip" && booking.phone) {
       sendSMS(booking.phone,
         `Shifty: Your Trip Has Started! 🚛\n` +
         `Hi ${booking.name}, your driver is on the way.\n` +
-        `Route: ${booking.pickup} → ${booking.drop}`
+        `Route: ${booking.pickup} → ${booking.drop_location}`
       );
     }
+
     if (status === "completed" && booking.phone) {
       sendSMS(booking.phone,
         `Shifty: Delivery Completed! ✅\n` +
         `Hi ${booking.name}, your delivery is done.\n` +
-        `Route: ${booking.pickup} → ${booking.drop}\n` +
+        `Route: ${booking.pickup} → ${booking.drop_location}\n` +
         `Thank you for using Shifty! We hope to serve you again.`
       );
     }
+
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: "Failed to update status" });
   }
 });
 
+// Self-assign — driver accepts load (atomic via Postgres conditional update)
 app.patch("/bookings/:id/self-assign", async (req, res) => {
   try {
     const { driverId } = req.body;
     if (!driverId) return res.status(400).json({ error: "driverId required" });
-    const ref = db.collection("bookings").doc(req.params.id);
-    const result = await db.runTransaction(async (t) => {
-      const doc = await t.get(ref);
-      if (!doc.exists) throw new Error("Booking not found");
-      if (doc.data().status !== "pending") return { success: false };
-      t.update(ref, { driverId, status: "accepted", updatedAt: new Date().toISOString() });
-      return { success: true, booking: doc.data() };
-    });
-    if (!result.success) return res.status(409).json({ error: "Booking already taken" });
-    const driverSnap = await db.collection("drivers").doc(driverId).get();
-    if (driverSnap.exists) {
-      const driver = { id: driverId, ...driverSnap.data() };
-      const booking = { id: req.params.id, ...result.booking };
+
+    // Atomic: only updates if status is still "pending" — prevents race condition
+    const { data: booking, error } = await supabase
+      .from("bookings")
+      .update({ driver_id: driverId, status: "accepted" })
+      .eq("id", req.params.id)
+      .eq("status", "pending")
+      .select()
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!booking) return res.status(409).json({ error: "Booking already taken" });
+
+    const { data: driver } = await supabase
+      .from("drivers")
+      .select("*")
+      .eq("id", driverId)
+      .maybeSingle();
+
+    if (driver) {
       smsDriverAssignedToCustomer(booking, driver);
       smsDriverAssigned(driver, booking);
     }
+
     res.json({ success: true });
   } catch (err) {
     console.error("Self-assign failed:", err);
@@ -537,43 +563,71 @@ app.patch("/bookings/:id/self-assign", async (req, res) => {
   }
 });
 
+// Release load
 app.patch("/bookings/:id/release", async (req, res) => {
   try {
     const { driverId } = req.body;
     if (!driverId) return res.status(400).json({ error: "driverId required" });
-    const ref = db.collection("bookings").doc(req.params.id);
-    const snap = await ref.get();
-    if (!snap.exists) return res.status(404).json({ error: "Booking not found" });
-    if (snap.data().driverId !== driverId) return res.status(403).json({ error: "Not your booking" });
-    await ref.update({ driverId: null, status: "pending", updatedAt: new Date().toISOString() });
+
+    const { data: existing, error: fetchErr } = await supabase
+      .from("bookings")
+      .select("*")
+      .eq("id", req.params.id)
+      .maybeSingle();
+    if (fetchErr) throw fetchErr;
+    if (!existing) return res.status(404).json({ error: "Booking not found" });
+    if (existing.driver_id !== driverId) return res.status(403).json({ error: "Not your booking" });
+
+    const { error } = await supabase
+      .from("bookings")
+      .update({ driver_id: null, status: "pending" })
+      .eq("id", req.params.id);
+    if (error) throw error;
+
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: "Failed to release booking" });
   }
 });
 
+// Driver response
 app.patch("/bookings/:id/driver-response", async (req, res) => {
   try {
     const { action, driverId } = req.body;
     if (!["accept", "reject"].includes(action)) return res.status(400).json({ error: "Invalid action" });
     if (!driverId) return res.status(400).json({ error: "driverId required" });
-    const ref = db.collection("bookings").doc(req.params.id);
-    const snap = await ref.get();
-    if (!snap.exists) return res.status(404).json({ error: "Booking not found" });
-    if (snap.data().driverId !== driverId) return res.status(403).json({ error: "This booking is not assigned to you" });
+
+    const { data: existing, error: fetchErr } = await supabase
+      .from("bookings")
+      .select("*")
+      .eq("id", req.params.id)
+      .maybeSingle();
+    if (fetchErr) throw fetchErr;
+    if (!existing) return res.status(404).json({ error: "Booking not found" });
+    if (existing.driver_id !== driverId) return res.status(403).json({ error: "This booking is not assigned to you" });
+
     const newStatus = action === "accept" ? "accepted" : "pending";
-    await ref.update({ status: newStatus, updatedAt: new Date().toISOString() });
+    const { error } = await supabase
+      .from("bookings")
+      .update({ status: newStatus })
+      .eq("id", req.params.id);
+    if (error) throw error;
+
     res.json({ success: true, status: newStatus });
   } catch (err) {
     res.status(500).json({ error: "Failed to update booking" });
   }
 });
 
+// Get driver's bookings
 app.get("/drivers/:id/bookings", async (req, res) => {
   try {
-    const snap = await db.collection("bookings").where("driverId", "==", req.params.id).get();
-    const data = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const { data, error } = await supabase
+      .from("bookings")
+      .select("*")
+      .eq("driver_id", req.params.id)
+      .order("created_at", { ascending: false });
+    if (error) throw error;
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: "Failed to load driver bookings" });
@@ -581,7 +635,7 @@ app.get("/drivers/:id/bookings", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`✅ Shifty API running on http://localhost:${PORT}`);
+  console.log(`✅ Shifty API running on http://localhost:${PORT} (Supabase)`);
   if (process.env.NODE_ENV === "production") {
     setInterval(async () => {
       try {

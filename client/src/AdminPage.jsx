@@ -1,7 +1,7 @@
 // src/AdminPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
 async function fetchJson(url, options) {
   const res = await fetch(url, options);
@@ -171,8 +171,8 @@ export default function AdminPage() {
         (b.name || "").toLowerCase().includes(q) ||
         (b.phone || "").includes(q) ||
         (b.pickup || "").toLowerCase().includes(q) ||
-        (b.drop || "").toLowerCase().includes(q) ||
-        (b.vehicleType || "").toLowerCase().includes(q) ||
+        (b.drop_location || "").toLowerCase().includes(q) ||
+        (b.vehicle_type || "").toLowerCase().includes(q) ||
         (b.status || "").toLowerCase().includes(q)
       );
     }
@@ -228,12 +228,10 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex">
 
-      {/* Desktop Sidebar */}
       <aside className="hidden md:flex md:flex-col w-60 bg-slate-900/80 border-r border-slate-800 flex-shrink-0">
         <SidebarContent />
       </aside>
 
-      {/* Mobile Sidebar Overlay */}
       {mobileSidebarOpen && (
         <>
           <div
@@ -255,13 +253,10 @@ export default function AdminPage() {
         </>
       )}
 
-      {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
 
-        {/* Topbar */}
         <header className="flex items-center justify-between px-4 md:px-6 py-3 border-b border-slate-800 bg-slate-950 sticky top-0 z-30">
           <div className="flex items-center gap-3">
-            {/* Mobile menu button */}
             <button
               onClick={() => setMobileSidebarOpen(true)}
               className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg border border-slate-700 text-slate-300 bg-slate-900"
@@ -288,7 +283,6 @@ export default function AdminPage() {
           </div>
         </header>
 
-        {/* Content */}
         <main className="flex-1 overflow-y-auto px-4 md:px-6 py-4 md:py-6 space-y-6">
           {error && (
             <div className="px-4 py-3 rounded-lg bg-rose-500/10 border border-rose-500/40 text-sm text-rose-200">
@@ -302,7 +296,6 @@ export default function AdminPage() {
             </div>
           ) : (
             <>
-              {/* DASHBOARD */}
               {activeSection === "dashboard" && (
                 <div className="space-y-6">
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
@@ -362,7 +355,7 @@ export default function AdminPage() {
                         <div key={b.id} className="flex items-center justify-between text-xs py-1.5 border-b border-slate-800/50 last:border-0">
                           <div>
                             <span className="text-white font-medium">{b.name}</span>
-                            <span className="text-slate-400 ml-2">{b.pickup} → {b.drop}</span>
+                            <span className="text-slate-400 ml-2">{b.pickup} → {b.drop_location}</span>
                           </div>
                           <span className={`px-2 py-0.5 rounded-full border text-[10px] ${STATUS_COLORS[b.status] || ""}`}>
                             {b.status}
@@ -374,7 +367,6 @@ export default function AdminPage() {
                 </div>
               )}
 
-              {/* BOOKINGS */}
               {activeSection === "bookings" && (
                 <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
                   <div className="flex items-center justify-between mb-4">
@@ -441,9 +433,9 @@ export default function AdminPage() {
                                 <div className="font-medium text-white">{b.name}</div>
                                 <div className="text-slate-400">+91{b.phone}</div>
                               </td>
-                              <td className="py-2 px-2 text-slate-300 max-w-[120px] truncate">{b.pickup} → {b.drop}</td>
-                              <td className="py-2 px-2 text-slate-300 hidden md:table-cell">{b.vehicleType}</td>
-                              <td className="py-2 px-2 text-slate-300 hidden md:table-cell">{formatDateTime(b.time)}</td>
+                              <td className="py-2 px-2 text-slate-300 max-w-[120px] truncate">{b.pickup} → {b.drop_location}</td>
+                              <td className="py-2 px-2 text-slate-300 hidden md:table-cell">{b.vehicle_type}</td>
+                              <td className="py-2 px-2 text-slate-300 hidden md:table-cell">{b.booking_time}</td>
                               <td className="py-2 px-2">
                                 <span className={`px-2 py-0.5 rounded-full border text-[10px] ${STATUS_COLORS[b.status] || ""}`}>
                                   {b.status}
@@ -488,7 +480,6 @@ export default function AdminPage() {
                 </div>
               )}
 
-              {/* DRIVERS */}
               {activeSection === "drivers" && (
                 <div className="space-y-4">
                   <div className="flex gap-3 text-xs text-slate-400">
@@ -512,16 +503,16 @@ export default function AdminPage() {
                                 📍 {d.city} · 📞 +91{d.phone}
                               </div>
                               <div className="text-xs text-slate-500 mt-0.5">
-                                🚛 {d.truckTypes || "N/A"}
+                                🚛 {d.truck_types || "N/A"}
                               </div>
-                              {d.drivingLicenseNo && (
+                              {d.driving_license_no && (
                                 <div className="text-xs text-slate-500 mt-0.5">
-                                  🪪 {d.drivingLicenseNo}
+                                  🪪 {d.driving_license_no}
                                 </div>
                               )}
-                              {d.aadharNumber && (
+                              {d.aadhar_number && (
                                 <div className="text-xs text-slate-500 mt-0.5">
-                                  🆔 ****{d.aadharNumber.slice(-4)}
+                                  🆔 ****{d.aadhar_number.slice(-4)}
                                 </div>
                               )}
                             </div>
@@ -565,7 +556,6 @@ export default function AdminPage() {
                 </div>
               )}
 
-              {/* ANALYTICS */}
               {activeSection === "analytics" && (
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
@@ -628,15 +618,14 @@ export default function AdminPage() {
         </main>
       </div>
 
-      {/* Assign Modal */}
       {assignModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-sm p-6 space-y-4">
             <h2 className="text-sm font-semibold text-white">Assign Driver</h2>
             <div className="bg-slate-800 rounded-lg p-3 text-xs space-y-1">
               <div className="text-white font-medium">{assignModal.name}</div>
-              <div className="text-slate-400">{assignModal.pickup} → {assignModal.drop}</div>
-              <div className="text-slate-400">{assignModal.vehicleType}</div>
+              <div className="text-slate-400">{assignModal.pickup} → {assignModal.drop_location}</div>
+              <div className="text-slate-400">{assignModal.vehicle_type}</div>
             </div>
             <select
               value={selectedDriverId}
@@ -646,7 +635,7 @@ export default function AdminPage() {
               <option value="">Select an active driver</option>
               {drivers.filter((d) => d.status === "active").map((d) => (
                 <option key={d.id} value={d.id}>
-                  {d.name} — {d.city} ({d.truckTypes || "N/A"})
+                  {d.name} — {d.city} ({d.truck_types || "N/A"})
                 </option>
               ))}
             </select>

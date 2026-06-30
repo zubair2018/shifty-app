@@ -1,8 +1,7 @@
 // src/DriverLoginPage.jsx
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
-import { auth } from "./firebase";
+import { supabase } from "./supabase";
 
 export default function DriverLoginPage() {
   const [phone, setPhone] = useState("");
@@ -10,40 +9,7 @@ export default function DriverLoginPage() {
   const [step, setStep] = useState("phone");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const confirmationRef = useRef(null);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    return () => {
-      if (window.recaptchaVerifier) {
-        try { window.recaptchaVerifier.clear(); } catch (e) {}
-        window.recaptchaVerifier = null;
-      }
-    };
-  }, []);
-
-  const initRecaptcha = async () => {
-    if (window.recaptchaVerifier) {
-      try { window.recaptchaVerifier.clear(); } catch (e) {}
-      window.recaptchaVerifier = null;
-    }
-
-    window.recaptchaVerifier = new RecaptchaVerifier(
-      auth,
-      "recaptcha-box",
-      {
-        size: "normal",
-        callback: () => {},
-        "expired-callback": () => {
-          window.recaptchaVerifier = null;
-          setError("reCAPTCHA expired. Please try again.");
-        },
-      }
-    );
-
-    await window.recaptchaVerifier.render();
-    return window.recaptchaVerifier;
-  };
 
   const handleSendOtp = async () => {
     setError("");
@@ -53,27 +19,23 @@ export default function DriverLoginPage() {
       return;
     }
     const fullPhone = `+91${digits}`;
+
     try {
       setLoading(true);
-      const verifier = await initRecaptcha();
-      const confirmation = await signInWithPhoneNumber(auth, fullPhone, verifier);
-      confirmationRef.current = confirmation;
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        phone: fullPhone,
+      });
+
+      if (otpError) {
+        console.error("OTP send error:", otpError);
+        setError(otpError.message || "Failed to send OTP. Please try again.");
+        return;
+      }
+
       setStep("otp");
     } catch (err) {
       console.error("OTP send error:", err);
-      if (err.code === "auth/too-many-requests") {
-        setError("Too many attempts. Wait a few minutes and try again.");
-      } else if (err.code === "auth/billing-not-enabled") {
-        setError("Please upgrade Firebase to Blaze plan for real OTP.");
-      } else if (err.code === "auth/invalid-phone-number") {
-        setError("Invalid phone number. Check and try again.");
-      } else {
-        setError("Failed to send OTP. Please refresh and try again.");
-      }
-      if (window.recaptchaVerifier) {
-        try { window.recaptchaVerifier.clear(); } catch (e) {}
-        window.recaptchaVerifier = null;
-      }
+      setError("Failed to send OTP. Please refresh and try again.");
     } finally {
       setLoading(false);
     }
@@ -85,19 +47,33 @@ export default function DriverLoginPage() {
       setError("Enter the 6-digit OTP.");
       return;
     }
+
     try {
       setLoading(true);
-      const result = await confirmationRef.current.confirm(otp);
-      const uid = result.user.uid;
-      const phoneDigits = phone.replace(/\D/g, "").slice(-10);
+      const digits = phone.replace(/\D/g, "");
+      const fullPhone = `+91${digits}`;
 
-      // Check if this phone is a registered active driver
+      const { data, error: verifyError } = await supabase.auth.verifyOtp({
+        phone: fullPhone,
+        token: otp,
+        type: "sms",
+      });
+
+      if (verifyError) {
+        console.error("OTP verify error:", verifyError);
+        setError("Invalid OTP. Please try again.");
+        return;
+      }
+
+      const uid = data.user.id;
+
+      // ✅ Check if this phone is a registered, active driver
       const res = await fetch(
-        `${import.meta.env.VITE_API_URL}/drivers/by-phone/${phoneDigits}`
+        `${import.meta.env.VITE_API_URL}/drivers/by-phone/${digits}`
       );
 
       if (!res.ok) {
-        await auth.signOut();
+        await supabase.auth.signOut();
         setError("This number is not registered as a driver. Contact admin.");
         return;
       }
@@ -105,13 +81,13 @@ export default function DriverLoginPage() {
       const matched = await res.json();
 
       if (matched.status !== "active") {
-        await auth.signOut();
+        await supabase.auth.signOut();
         setError("Your account is not active yet. Contact admin.");
         return;
       }
 
-      // Link authUid to driver record if not already linked
-      if (!matched.authUid) {
+      // Link auth_uid to driver record if not already linked
+      if (!matched.auth_uid) {
         await fetch(
           `${import.meta.env.VITE_API_URL}/drivers/${matched.id}/link-auth`,
           {
@@ -173,10 +149,6 @@ export default function DriverLoginPage() {
               <p className="text-xs text-gray-500 mt-1">
                 Use the number you registered with
               </p>
-            </div>
-
-            <div className="flex justify-center">
-              <div id="recaptcha-box"></div>
             </div>
 
             <button
