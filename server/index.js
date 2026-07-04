@@ -6,7 +6,6 @@ import * as dotenv from "dotenv";
 import { supabase } from "./supabase.js";
 import {
   areasInSameZone,
-  getZoneName,
   getZoneForArea,
   getZoneForCoordinates,
   ZONES,
@@ -216,7 +215,37 @@ app.get("/zones", (req, res) => {
   res.json(ZONES.map((z) => ({ id: z.id, name: z.name, areas: z.areas })));
 });
 
-// City bookings — for driver dashboard, zone matching
+// ---- Google Places routes (keeps API key on server) ----
+
+app.get("/places/autocomplete", async (req, res) => {
+  try {
+    const input = req.query.input;
+    if (!input) return res.json({ predictions: [] });
+    const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(input)}&components=country:in&key=${process.env.GOOGLE_MAPS_KEY}`;
+    const response = await fetch(url);
+    const data = await response.json();
+    res.json({ predictions: data.predictions || [] });
+  } catch (err) {
+    res.status(500).json({ predictions: [] });
+  }
+});
+
+app.get("/places/details", async (req, res) => {
+  try {
+    const placeId = req.query.place_id;
+    if (!placeId) return res.json({ result: null });
+    const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=geometry&key=${process.env.GOOGLE_MAPS_KEY}`;
+    const response = await fetch(url);
+    const data = await response.json();
+    res.json({ result: data.result || null });
+  } catch (err) {
+    res.status(500).json({ result: null });
+  }
+});
+
+// ---- Bookings ----
+
+// City bookings — MUST be before /bookings/:id
 app.get("/bookings/city/:city", async (req, res) => {
   try {
     const city = req.params.city.trim();
@@ -260,7 +289,6 @@ app.get("/bookings/city/:city", async (req, res) => {
     });
 
     const assignedFiltered = assigned.filter((b) => b.status !== "pending");
-
     const all = [...pendingFiltered, ...assignedFiltered];
     all.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     res.json(all);
@@ -270,7 +298,6 @@ app.get("/bookings/city/:city", async (req, res) => {
   }
 });
 
-// List all bookings
 app.get("/bookings", async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -284,7 +311,6 @@ app.get("/bookings", async (req, res) => {
   }
 });
 
-// Create booking
 app.post("/bookings", async (req, res) => {
   try {
     const { name, phone, pickup, drop, time, vehicleType, loadDetails, pickupLat, pickupLng, dropLat, dropLng } = req.body;
@@ -329,7 +355,41 @@ app.post("/bookings", async (req, res) => {
   }
 });
 
-// Create driver
+// ---- Drivers ----
+
+// MUST be before /drivers/:id routes
+app.get("/drivers/by-phone/:phone", async (req, res) => {
+  try {
+    const phone = cleanPhone(req.params.phone);
+    const { data, error } = await supabase
+      .from("drivers")
+      .select("*")
+      .eq("phone", phone)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: "Driver not found" });
+    return res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to find driver" });
+  }
+});
+
+app.get("/drivers", async (req, res) => {
+  try {
+    let query = supabase.from("drivers").select("*");
+    if (req.query.authUid) {
+      query = query.eq("auth_uid", req.query.authUid);
+    } else {
+      query = query.order("created_at", { ascending: false });
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to load drivers" });
+  }
+});
+
 app.post("/drivers", async (req, res) => {
   try {
     const { name, phone, city, truckTypes, fleetSize, drivingLicenseNo, aadharNumber, cityLat, cityLng } = req.body;
@@ -368,40 +428,6 @@ app.post("/drivers", async (req, res) => {
   } catch (err) {
     console.error("Create driver failed", err);
     return res.status(500).json({ error: "Failed to create driver" });
-  }
-});
-
-// Get driver by phone — MUST be before /drivers/:id-style routes
-app.get("/drivers/by-phone/:phone", async (req, res) => {
-  try {
-    const phone = cleanPhone(req.params.phone);
-    const { data, error } = await supabase
-      .from("drivers")
-      .select("*")
-      .eq("phone", phone)
-      .maybeSingle();
-    if (error) throw error;
-    if (!data) return res.status(404).json({ error: "Driver not found" });
-    return res.json(data);
-  } catch (err) {
-    res.status(500).json({ error: "Failed to find driver" });
-  }
-});
-
-// List drivers
-app.get("/drivers", async (req, res) => {
-  try {
-    let query = supabase.from("drivers").select("*");
-    if (req.query.authUid) {
-      query = query.eq("auth_uid", req.query.authUid);
-    } else {
-      query = query.order("created_at", { ascending: false });
-    }
-    const { data, error } = await query;
-    if (error) throw error;
-    res.json(data);
-  } catch (err) {
-    res.status(500).json({ error: "Failed to load drivers" });
   }
 });
 
@@ -455,17 +481,29 @@ app.patch("/drivers/:id/link-auth", async (req, res) => {
   }
 });
 
-// Assign driver (admin)
+app.get("/drivers/:id/bookings", async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("bookings")
+      .select("*")
+      .eq("driver_id", req.params.id)
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to load driver bookings" });
+  }
+});
+
+// ---- Booking actions ----
+
 app.patch("/bookings/:id/assign-driver", async (req, res) => {
   try {
     const { driverId } = req.body;
     if (!driverId) return res.status(400).json({ error: "driverId required" });
 
     const { data: driver, error: driverErr } = await supabase
-      .from("drivers")
-      .select("*")
-      .eq("id", driverId)
-      .maybeSingle();
+      .from("drivers").select("*").eq("id", driverId).maybeSingle();
     if (driverErr) throw driverErr;
     if (!driver) return res.status(404).json({ error: "Driver not found" });
 
@@ -480,7 +518,6 @@ app.patch("/bookings/:id/assign-driver", async (req, res) => {
 
     smsDriverAssigned(driver, booking);
     smsDriverAssignedToCustomer(booking, driver);
-
     res.json({ success: true });
   } catch (err) {
     console.error("Assign driver failed", err);
@@ -488,7 +525,6 @@ app.patch("/bookings/:id/assign-driver", async (req, res) => {
   }
 });
 
-// Update booking status
 app.patch("/bookings/:id/status", async (req, res) => {
   try {
     const { status } = req.body;
@@ -511,7 +547,6 @@ app.patch("/bookings/:id/status", async (req, res) => {
         `Route: ${booking.pickup} → ${booking.drop_location}`
       );
     }
-
     if (status === "completed" && booking.phone) {
       sendSMS(booking.phone,
         `Shifty: Delivery Completed! ✅\n` +
@@ -520,20 +555,17 @@ app.patch("/bookings/:id/status", async (req, res) => {
         `Thank you for using Shifty! We hope to serve you again.`
       );
     }
-
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: "Failed to update status" });
   }
 });
 
-// Self-assign — driver accepts load (atomic via Postgres conditional update)
 app.patch("/bookings/:id/self-assign", async (req, res) => {
   try {
     const { driverId } = req.body;
     if (!driverId) return res.status(400).json({ error: "driverId required" });
 
-    // Atomic: only updates if status is still "pending" — prevents race condition
     const { data: booking, error } = await supabase
       .from("bookings")
       .update({ driver_id: driverId, status: "accepted" })
@@ -541,21 +573,15 @@ app.patch("/bookings/:id/self-assign", async (req, res) => {
       .eq("status", "pending")
       .select()
       .maybeSingle();
-
     if (error) throw error;
     if (!booking) return res.status(409).json({ error: "Booking already taken" });
 
     const { data: driver } = await supabase
-      .from("drivers")
-      .select("*")
-      .eq("id", driverId)
-      .maybeSingle();
-
+      .from("drivers").select("*").eq("id", driverId).maybeSingle();
     if (driver) {
       smsDriverAssignedToCustomer(booking, driver);
       smsDriverAssigned(driver, booking);
     }
-
     res.json({ success: true });
   } catch (err) {
     console.error("Self-assign failed:", err);
@@ -563,17 +589,13 @@ app.patch("/bookings/:id/self-assign", async (req, res) => {
   }
 });
 
-// Release load
 app.patch("/bookings/:id/release", async (req, res) => {
   try {
     const { driverId } = req.body;
     if (!driverId) return res.status(400).json({ error: "driverId required" });
 
     const { data: existing, error: fetchErr } = await supabase
-      .from("bookings")
-      .select("*")
-      .eq("id", req.params.id)
-      .maybeSingle();
+      .from("bookings").select("*").eq("id", req.params.id).maybeSingle();
     if (fetchErr) throw fetchErr;
     if (!existing) return res.status(404).json({ error: "Booking not found" });
     if (existing.driver_id !== driverId) return res.status(403).json({ error: "Not your booking" });
@@ -583,14 +605,12 @@ app.patch("/bookings/:id/release", async (req, res) => {
       .update({ driver_id: null, status: "pending" })
       .eq("id", req.params.id);
     if (error) throw error;
-
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: "Failed to release booking" });
   }
 });
 
-// Driver response
 app.patch("/bookings/:id/driver-response", async (req, res) => {
   try {
     const { action, driverId } = req.body;
@@ -598,39 +618,18 @@ app.patch("/bookings/:id/driver-response", async (req, res) => {
     if (!driverId) return res.status(400).json({ error: "driverId required" });
 
     const { data: existing, error: fetchErr } = await supabase
-      .from("bookings")
-      .select("*")
-      .eq("id", req.params.id)
-      .maybeSingle();
+      .from("bookings").select("*").eq("id", req.params.id).maybeSingle();
     if (fetchErr) throw fetchErr;
     if (!existing) return res.status(404).json({ error: "Booking not found" });
     if (existing.driver_id !== driverId) return res.status(403).json({ error: "This booking is not assigned to you" });
 
     const newStatus = action === "accept" ? "accepted" : "pending";
     const { error } = await supabase
-      .from("bookings")
-      .update({ status: newStatus })
-      .eq("id", req.params.id);
+      .from("bookings").update({ status: newStatus }).eq("id", req.params.id);
     if (error) throw error;
-
     res.json({ success: true, status: newStatus });
   } catch (err) {
     res.status(500).json({ error: "Failed to update booking" });
-  }
-});
-
-// Get driver's bookings
-app.get("/drivers/:id/bookings", async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from("bookings")
-      .select("*")
-      .eq("driver_id", req.params.id)
-      .order("created_at", { ascending: false });
-    if (error) throw error;
-    res.json(data);
-  } catch (err) {
-    res.status(500).json({ error: "Failed to load driver bookings" });
   }
 });
 
